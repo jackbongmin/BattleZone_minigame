@@ -92,62 +92,53 @@
 
   <!-- In-Game HUD Overlays -->
   <div id="gameHud" style="display: none;">
-    <!-- Top Left: Local Player Status -->
+    <!-- Top Left: Minimal HUD Local Player Status -->
     <div class="hud-player-card">
-      <div class="player-profile-row">
+      <!-- 1st Row: Color Indicator + Nickname + Ammo Badge + Cooldown -->
+      <div class="hud-header-row">
         <div class="player-avatar-dot" id="hudAvatarDot"></div>
         <span class="hud-nickname" id="hudNickname">Player</span>
-        <span class="hud-kills-badge">⚔️ <span id="hudKills">0</span> Kills</span>
-      </div>
-
-      <!-- Health Bar -->
-      <div class="hud-bar-container">
-        <div class="bar-label-row">
-          <span>체력 (HP)</span>
-          <span id="hudHpText">100 / 100</span>
+        <div class="hud-ammo-badge" id="hudAmmoBadge" title="잔여 탄약">
+          <span class="ammo-icon">🏹</span>
+          <span id="hudAmmoText">18/30</span>
         </div>
-        <div class="bar-track hp-track">
-          <div class="bar-fill hp-fill" id="hudHpFill" style="width: 100%;"></div>
-        </div>
-      </div>
-
-      <!-- Stamina Bar -->
-      <div class="hud-bar-container">
-        <div class="bar-label-row">
-          <span>스태미나</span>
-          <span id="hudStaminaText">100 / 100</span>
-        </div>
-        <div class="bar-track stamina-track">
-          <div class="bar-fill stamina-fill" id="hudStaminaFill" style="width: 100%;"></div>
-        </div>
-      </div>
-
-      <!-- Attack Cooldown Indicator -->
-      <div class="cooldown-indicator-row">
-        <span id="cooldownLabel">공격 쿨타임</span>
         <div class="cooldown-dot ready" id="cooldownDot">READY</div>
       </div>
 
-      <!-- Weapon & Ammo Selection Slots (1: Sword, 2: Ranged) -->
-      <div class="hud-weapons-row">
-        <button type="button" class="weapon-slot-btn active" id="slotWeapon1" data-weapon="1">
-          <span class="weapon-key">1</span>
-          <span class="weapon-icon">🗡️</span>
-          <span class="weapon-name">검</span>
+      <!-- 2nd Row: HP Bar -->
+      <div class="hud-bar-row">
+        <span class="bar-tag hp-tag">HP</span>
+        <div class="bar-track hp-track">
+          <div class="bar-fill hp-fill" id="hudHpFill" style="width: 100%;"></div>
+        </div>
+        <span class="bar-val" id="hudHpText">100</span>
+      </div>
+
+      <!-- 3rd Row: Stamina Bar -->
+      <div class="hud-bar-row">
+        <span class="bar-tag sp-tag">SP</span>
+        <div class="bar-track stamina-track">
+          <div class="bar-fill stamina-fill" id="hudStaminaFill" style="width: 100%;"></div>
+        </div>
+        <span class="bar-val" id="hudStaminaText">100</span>
+      </div>
+
+      <!-- 4th Row: Minimal Weapon Toggle Slots & Kills -->
+      <div class="hud-weapons-minimal">
+        <button type="button" class="weapon-slot-mini active" id="slotWeapon1" data-weapon="1" title="근접 검 (1)">
+          <span class="mini-key">1</span>
+          <span class="mini-icon">🗡️</span>
         </button>
-        <button type="button" class="weapon-slot-btn" id="slotWeapon2" data-weapon="2">
-          <span class="weapon-key">2</span>
-          <span class="weapon-icon">🏹</span>
-          <div class="weapon-details">
-            <span class="weapon-name">원거리</span>
-            <span class="weapon-ammo" id="hudAmmoText">18 / 30</span>
-          </div>
+        <button type="button" class="weapon-slot-mini" id="slotWeapon2" data-weapon="2" title="원거리 무기 (2)">
+          <span class="mini-key">2</span>
+          <span class="mini-icon">🏹</span>
         </button>
+        <span class="hud-kills-mini" title="처치 수">⚔️ <span id="hudKills">0</span></span>
       </div>
 
       <!-- Safe Zone Status Badge -->
       <div id="safeZoneBadge" class="safe-zone-badge" style="display: none;">
-        <span>🛡️ 안전지대 보호 중 (무적)</span>
+        <span>🛡️ 안전지대 (무적)</span>
       </div>
 
       <!-- Active Buffs Indicator Container -->

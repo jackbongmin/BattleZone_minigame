@@ -332,40 +332,42 @@ kbd {
   z-index: 20;
 }
 
-/* Player Profile Card (Top-Left) */
+/* Player Profile Card (Top-Left Minimal HUD) */
 .hud-player-card {
   position: absolute;
-  top: 20px;
-  left: 20px;
-  width: 250px;
-  background: var(--panel-bg);
-  border: 1px solid var(--panel-border);
-  border-radius: 16px;
-  padding: 14px 18px;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  top: 14px;
+  left: 14px;
+  width: 195px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 8px 10px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
   pointer-events: auto;
+  transition: all 0.2s ease;
 }
 
-.player-profile-row {
+.hud-header-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: 6px;
+  margin-bottom: 6px;
 }
 
 .player-avatar-dot {
-  width: 18px;
-  height: 18px;
+  width: 13px;
+  height: 13px;
   border-radius: 50%;
   background: var(--primary);
-  border: 2px solid #fff;
-  box-shadow: 0 0 8px var(--primary-glow);
+  border: 1.5px solid #fff;
+  box-shadow: 0 0 6px var(--primary-glow);
+  flex-shrink: 0;
 }
 
 .hud-nickname {
   font-weight: 700;
-  font-size: 1rem;
+  font-size: 0.82rem;
   color: #fff;
   flex: 1;
   white-space: nowrap;
@@ -373,76 +375,34 @@ kbd {
   text-overflow: ellipsis;
 }
 
-.hud-kills-badge {
-  font-size: 0.78rem;
-  font-weight: 700;
-  background: rgba(239, 68, 68, 0.2);
-  color: #fca5a5;
-  padding: 3px 8px;
-  border-radius: 999px;
-  border: 1px solid rgba(239, 68, 68, 0.4);
-}
-
-/* Bars */
-.hud-bar-container {
-  margin-bottom: 10px;
-}
-
-.bar-label-row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.74rem;
-  font-weight: 700;
-  color: var(--text-muted);
-  margin-bottom: 4px;
-}
-
-.bar-track {
-  width: 100%;
-  height: 8px;
-  background: rgba(0, 0, 0, 0.5);
-  border-radius: 999px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.bar-fill {
-  height: 100%;
-  border-radius: 999px;
-  transition: width 0.15s ease-out;
-}
-
-.hp-fill {
-  background: linear-gradient(90deg, #10b981 0%, #34d399 100%);
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
-}
-
-.hp-fill.low {
-  background: linear-gradient(90deg, #ef4444 0%, #f87171 100%);
-  box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
-}
-
-.stamina-fill {
-  background: linear-gradient(90deg, #06b6d4 0%, #38bdf8 100%);
-  box-shadow: 0 0 8px rgba(6, 182, 212, 0.4);
-}
-
-/* Cooldown indicator */
-.cooldown-indicator-row {
+.hud-ammo-badge {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  font-size: 0.74rem;
-  font-weight: 700;
-  color: var(--text-muted);
+  gap: 3px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #fbbf24;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 1px 5px;
+  border-radius: 5px;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  font-family: monospace;
+  flex-shrink: 0;
+}
+
+.hud-ammo-badge.empty {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.4);
+  animation: pulseEmpty 1s infinite;
 }
 
 .cooldown-dot {
-  padding: 2px 8px;
-  border-radius: 6px;
-  font-size: 0.7rem;
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: 0.62rem;
   font-weight: 800;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
 }
 
 .cooldown-dot.ready {
@@ -457,77 +417,126 @@ kbd {
   border: 1px solid rgba(239, 68, 68, 0.4);
 }
 
-/* Weapon & Ammo Selection Row */
-.hud-weapons-row {
-  display: flex;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.weapon-slot-btn {
-  flex: 1;
+/* Minimal Bars */
+.hud-bar-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
+  margin-bottom: 4px;
+}
+
+.bar-tag {
+  width: 18px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+
+.hp-tag {
+  color: #34d399;
+}
+
+.sp-tag {
+  color: #38bdf8;
+}
+
+.bar-track {
+  flex: 1;
+  height: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.15s ease-out;
+}
+
+.hp-fill {
+  background: linear-gradient(90deg, #10b981 0%, #34d399 100%);
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.4);
+}
+
+.hp-fill.low {
+  background: linear-gradient(90deg, #ef4444 0%, #f87171 100%);
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
+}
+
+.stamina-fill {
+  background: linear-gradient(90deg, #06b6d4 0%, #38bdf8 100%);
+  box-shadow: 0 0 6px rgba(6, 182, 212, 0.4);
+}
+
+.bar-val {
+  font-size: 0.65rem;
+  font-weight: 700;
+  font-family: monospace;
+  color: #94a3b8;
+  min-width: 22px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* Minimal Weapon Slots & Kills Row */
+.hud-weapons-minimal {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.weapon-slot-mini {
+  display: flex;
+  align-items: center;
+  gap: 3px;
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
-  padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 2px 6px;
   color: #d1d5db;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   font-family: inherit;
 }
 
-.weapon-slot-btn:hover {
+.weapon-slot-mini:hover {
   background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.25);
 }
 
-.weapon-slot-btn.active {
+.weapon-slot-mini.active {
   background: rgba(59, 130, 246, 0.25);
   border-color: #3b82f6;
-  box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
   color: #ffffff;
 }
 
-.weapon-key {
-  display: inline-block;
-  padding: 1px 5px;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-  font-size: 0.68rem;
+.mini-key {
+  font-size: 0.6rem;
   font-weight: 800;
   color: #93c5fd;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 0 3px;
+  border-radius: 3px;
 }
 
-.weapon-icon {
-  font-size: 1rem;
+.mini-icon {
+  font-size: 0.82rem;
 }
 
-.weapon-name {
-  font-size: 0.75rem;
-  font-weight: 700;
-}
-
-.weapon-details {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  line-height: 1.1;
-}
-
-.weapon-ammo {
+.hud-kills-mini {
+  margin-left: auto;
   font-size: 0.68rem;
-  font-weight: 800;
-  color: #fbbf24;
-  font-family: monospace;
-}
-
-.weapon-ammo.empty {
-  color: #ef4444;
-  animation: pulseEmpty 1s infinite;
+  font-weight: 700;
+  background: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+  padding: 2px 6px;
+  border-radius: 5px;
+  border: 1px solid rgba(239, 68, 68, 0.35);
 }
 
 @keyframes pulseEmpty {
@@ -536,13 +545,13 @@ kbd {
 }
 
 .safe-zone-badge {
-  margin-top: 8px;
+  margin-top: 5px;
   background: rgba(245, 158, 11, 0.22);
   border: 1px solid rgba(245, 158, 11, 0.55);
   color: #fef08a;
-  padding: 5px 8px;
-  border-radius: 8px;
-  font-size: 0.76rem;
+  padding: 3px 6px;
+  border-radius: 6px;
+  font-size: 0.68rem;
   font-weight: 700;
   text-align: center;
   animation: pulseSafe 1.8s infinite ease-in-out;
@@ -550,31 +559,31 @@ kbd {
 
 @keyframes pulseSafe {
   0%, 100% { opacity: 0.85; }
-  50% { opacity: 1; box-shadow: 0 0 10px rgba(245, 158, 11, 0.4); }
+  50% { opacity: 1; box-shadow: 0 0 8px rgba(245, 158, 11, 0.35); }
 }
 
 /* Active Buffs Pill Indicators */
 .hud-buffs-container {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  margin-top: 8px;
+  gap: 3px;
+  margin-top: 5px;
 }
 
 .hud-buff-pill {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 0.73rem;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   animation: fadeInBuff 0.25s ease-out;
 }
 
 @keyframes fadeInBuff {
-  from { opacity: 0; transform: translateY(-4px); }
+  from { opacity: 0; transform: translateY(-3px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
@@ -582,14 +591,21 @@ kbd {
   background: rgba(239, 68, 68, 0.22);
   border: 1px solid rgba(239, 68, 68, 0.55);
   color: #fca5a5;
-  box-shadow: 0 0 10px rgba(239, 68, 68, 0.25);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.25);
 }
 
 .hud-buff-spd {
   background: rgba(6, 182, 212, 0.22);
   border: 1px solid rgba(6, 182, 212, 0.55);
   color: #a5f3fc;
-  box-shadow: 0 0 10px rgba(6, 182, 212, 0.25);
+  box-shadow: 0 0 8px rgba(6, 182, 212, 0.25);
+}
+
+.hud-buff-dmg {
+  background: rgba(245, 158, 11, 0.22);
+  border: 1px solid rgba(245, 158, 11, 0.55);
+  color: #fde047;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.25);
 }
 
 /* Leaderboard (Top-Right) */
@@ -687,24 +703,24 @@ kbd {
 .killfeed-container {
   position: absolute;
   left: 20px;
-  bottom: 260px;
+  bottom: 240px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   pointer-events: none;
-  max-width: 380px;
+  max-width: 360px;
   z-index: 15;
 }
 
 .killfeed-item {
-  background: rgba(15, 23, 42, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 8px 14px;
-  border-radius: 10px;
-  font-size: 0.82rem;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.8rem;
   font-weight: 600;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(4px);
   animation: slideInFeed 0.25s ease-out;
   display: flex;
   align-items: center;
@@ -727,24 +743,37 @@ kbd {
   position: absolute;
   left: 20px;
   bottom: 20px;
-  width: 320px;
-  background: rgba(15, 23, 42, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 14px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(10px);
+  width: 300px;
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(5px);
   z-index: 25;
   pointer-events: auto;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  opacity: 0.5;
+  transition: opacity 0.25s ease, background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* Full opacity when hovering or typing to avoid blocking map visibility during gameplay */
+.chat-container:hover,
+.chat-container:focus-within,
+.chat-container.active {
+  opacity: 1;
+  background: rgba(15, 23, 42, 0.85);
+  border-color: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
 .chat-header {
-  padding: 8px 12px;
-  background: rgba(0, 0, 0, 0.25);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  font-size: 0.74rem;
+  padding: 6px 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 0.72rem;
   font-weight: 700;
   color: var(--text-muted);
 }

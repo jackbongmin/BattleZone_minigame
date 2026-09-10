@@ -24,10 +24,11 @@ class Player {
     this.kills = 0;
     this.inSafeZone = false;
 
-    // Active Buffs { atkSpeed: ms, moveSpeed: ms }
+    // Active Buffs { atkSpeed: ms, moveSpeed: ms, attackBoost: ms }
     this.buffs = {
       atkSpeed: 0,
       moveSpeed: 0,
+      attackBoost: 0,
     };
 
     // Persistent overhead chat bubble { text, time, expireTime }
@@ -138,6 +139,10 @@ class Player {
     return true;
   }
 
+  getDamageMultiplier() {
+    return this.buffs.attackBoost > 0 ? (config.MONSTER_DROPS ? config.MONSTER_DROPS.BUFF_ATTACK_MULTIPLIER : 1.5) : 1.0;
+  }
+
   takeDamage(amount, attackerId = null) {
     if (this.isDead || this.inSafeZone) return { died: false, actualDamage: 0 };
 
@@ -151,6 +156,7 @@ class Player {
       this.score = 0;
       this.buffs.atkSpeed = 0;
       this.buffs.moveSpeed = 0;
+      this.buffs.attackBoost = 0;
       return { died: true, actualDamage, killerId: attackerId };
     }
 
@@ -169,6 +175,7 @@ class Player {
     this.isAttacking = false;
     this.buffs.atkSpeed = 0;
     this.buffs.moveSpeed = 0;
+    this.buffs.attackBoost = 0;
     this.ammo = config.PLAYER.INITIAL_AMMO;
     this.selectedWeapon = 1;
   }
@@ -188,6 +195,9 @@ class Player {
     }
     if (this.buffs.moveSpeed > 0) {
       this.buffs.moveSpeed = Math.max(0, this.buffs.moveSpeed - dt * 1000);
+    }
+    if (this.buffs.attackBoost > 0) {
+      this.buffs.attackBoost = Math.max(0, this.buffs.attackBoost - dt * 1000);
     }
 
     // Check safe zone status
@@ -279,10 +289,11 @@ class Player {
       buffs: {
         atkSpeed: Math.max(0, Math.ceil(this.buffs.atkSpeed / 1000)),
         moveSpeed: Math.max(0, Math.ceil(this.buffs.moveSpeed / 1000)),
+        attackBoost: Math.max(0, Math.ceil((this.buffs.attackBoost || 0) / 1000)),
       },
       respawnCountdown: this.getRemainingRespawnSeconds(),
-      score: this.score,
-      kills: this.kills,
+      score: this.score ?? 0,
+      kills: this.kills ?? 0,
       chatMessage:
         this.chatMessage && Date.now() < this.chatMessage.expireTime
           ? { text: this.chatMessage.text, time: this.chatMessage.time }

@@ -157,6 +157,11 @@ class Renderer {
       this.drawAmmoDrops(ctx, gameState.ammoDrops);
     }
 
+    // 4.2 Monster Kill Drop Rewards (Ammo, Buffs, Heal)
+    if (gameState.monsterDrops) {
+      this.drawMonsterDrops(ctx, gameState.monsterDrops);
+    }
+
     // 5. Nature Monsters (Wild Boar & Thorn Flower) with smooth interpolation
     if (gameState.monsters) {
       for (const monster of gameState.monsters) {
@@ -651,6 +656,208 @@ class Renderer {
       ctx.lineWidth = 2.5;
       ctx.strokeText('+6 탄약', 0, -18);
       ctx.fillText('+6 탄약', 0, -18);
+
+      ctx.restore();
+    }
+  }
+
+  /**
+   * 4.2 Monster Kill Drop Rewards (Ammo 2/6, Buffs, Heal)
+   */
+  drawMonsterDrops(ctx, monsterDrops) {
+    const t = this.animTime;
+
+    for (const drop of monsterDrops) {
+      const floatY = Math.sin(t * 4.2 + drop.x * 0.08) * 4.5;
+      const dy = drop.y + floatY;
+
+      ctx.save();
+      ctx.translate(drop.x, dy);
+
+      // Ground Shadow
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      ctx.beginPath();
+      ctx.ellipse(0, drop.radius * 0.7 - floatY, drop.radius * 0.85, drop.radius * 0.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Pulsing Aura Ring
+      const auraPulse = 0.8 + Math.sin(t * 5 + drop.y) * 0.2;
+
+      if (drop.dropType === 'ammo') {
+        // ===== AMMO DROP (+2 or +6) =====
+        const isBig = drop.subType === 'ammo_6';
+        const auraColor = isBig ? `rgba(245, 158, 11, ${0.75 * auraPulse})` : `rgba(234, 179, 8, ${0.6 * auraPulse})`;
+        ctx.strokeStyle = auraColor;
+        ctx.lineWidth = isBig ? 3 : 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, drop.radius + (isBig ? 5 : 3), 0, Math.PI * 2);
+        ctx.stroke();
+
+        if (isBig) {
+          // Large Golden Ammo Crate (+6)
+          const bw = 24;
+          const bh = 18;
+          ctx.fillStyle = '#b45309';
+          drawRoundedRect(ctx, -bw / 2, -bh / 2, bw, bh, 4);
+          ctx.fill();
+
+          ctx.strokeStyle = '#fef08a';
+          ctx.lineWidth = 1.5;
+          drawRoundedRect(ctx, -bw / 2, -bh / 2, bw, bh, 4);
+          ctx.stroke();
+
+          // Golden Band
+          ctx.fillStyle = '#f59e0b';
+          ctx.fillRect(-bw / 2 + 2, -2, bw - 4, 4);
+
+          // 3 Big Bullets
+          ctx.fillStyle = '#fef08a';
+          ctx.fillRect(-6, -bh / 2 - 4, 3, 5);
+          ctx.fillRect(-1.5, -bh / 2 - 5, 3, 6);
+          ctx.fillRect(3, -bh / 2 - 4, 3, 5);
+        } else {
+          // Compact Ammo Pouch (+2)
+          const bw = 18;
+          const bh = 14;
+          ctx.fillStyle = '#78350f';
+          drawRoundedRect(ctx, -bw / 2, -bh / 2, bw, bh, 3);
+          ctx.fill();
+
+          ctx.strokeStyle = '#facc15';
+          ctx.lineWidth = 1.5;
+          drawRoundedRect(ctx, -bw / 2, -bh / 2, bw, bh, 3);
+          ctx.stroke();
+
+          // 2 Golden Bullets
+          ctx.fillStyle = '#fde047';
+          ctx.fillRect(-4, -bh / 2 - 3, 3, 5);
+          ctx.fillRect(1, -bh / 2 - 3, 3, 5);
+        }
+
+        // Tag
+        ctx.font = '800 11px Pretendard, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = isBig ? '#fde047' : '#fef08a';
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 2.5;
+        ctx.strokeText(isBig ? '📦 +6 탄약' : '🎒 +2 탄약', 0, -18);
+        ctx.fillText(isBig ? '📦 +6 탄약' : '🎒 +2 탄약', 0, -18);
+
+      } else if (drop.dropType === 'heal') {
+        // ===== HEAL DROP (+35 HP) =====
+        ctx.strokeStyle = `rgba(16, 185, 129, ${0.75 * auraPulse})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, drop.radius + 4, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Emerald Heart Crystal Body
+        ctx.fillStyle = '#10b981';
+        ctx.beginPath();
+        ctx.moveTo(0, 8);
+        ctx.lineTo(-10, -2);
+        ctx.quadraticCurveTo(-10, -10, -4, -10);
+        ctx.quadraticCurveTo(0, -7, 0, -3);
+        ctx.quadraticCurveTo(0, -7, 4, -10);
+        ctx.quadraticCurveTo(10, -10, 10, -2);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = '#a7f3d0';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // White cross center
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(-1.5, -4, 3, 7);
+        ctx.fillRect(-3.5, -2, 7, 3);
+
+        // Tag
+        ctx.font = '800 11px Pretendard, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#6ee7b7';
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 2.5;
+        ctx.strokeText('💚 +35 HP', 0, -18);
+        ctx.fillText('💚 +35 HP', 0, -18);
+
+      } else if (drop.dropType === 'buff') {
+        if (drop.subType === 'move_speed') {
+          // ===== SPEED BUFF (Cyan Wind Orb) =====
+          ctx.strokeStyle = `rgba(6, 182, 212, ${0.75 * auraPulse})`;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(0, 0, drop.radius + 4, 0, Math.PI * 2);
+          ctx.stroke();
+
+          // Cyan Orb
+          ctx.fillStyle = '#06b6d4';
+          ctx.beginPath();
+          ctx.arc(0, 0, 11, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.strokeStyle = '#a5f3fc';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+
+          // Wind wings icon
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.moveTo(-5, 2);
+          ctx.quadraticCurveTo(0, -6, 6, -2);
+          ctx.quadraticCurveTo(2, 3, -5, 2);
+          ctx.fill();
+
+          // Tag
+          ctx.font = '800 11px Pretendard, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#67e8f9';
+          ctx.strokeStyle = '#000000';
+          ctx.lineWidth = 2.5;
+          ctx.strokeText('💨 신속 (이속)', 0, -18);
+          ctx.fillText('💨 신속 (이속)', 0, -18);
+
+        } else {
+          // ===== ATTACK BUFF (Ruby Fire Blade / Flame Orb) =====
+          ctx.strokeStyle = `rgba(239, 68, 68, ${0.75 * auraPulse})`;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(0, 0, drop.radius + 4, 0, Math.PI * 2);
+          ctx.stroke();
+
+          // Flame Orb
+          ctx.fillStyle = '#f97316';
+          ctx.beginPath();
+          ctx.arc(0, 0, 11, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.strokeStyle = '#fde047';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+
+          // Flame Sword icon
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.moveTo(0, -7);
+          ctx.lineTo(4, 0);
+          ctx.lineTo(1, 1);
+          ctx.lineTo(1, 6);
+          ctx.lineTo(-1, 6);
+          ctx.lineTo(-1, 1);
+          ctx.lineTo(-4, 0);
+          ctx.closePath();
+          ctx.fill();
+
+          // Tag
+          ctx.font = '800 11px Pretendard, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#fde047';
+          ctx.strokeStyle = '#000000';
+          ctx.lineWidth = 2.5;
+          ctx.strokeText('🔥 분노 (공격력)', 0, -18);
+          ctx.fillText('🔥 분노 (공격력)', 0, -18);
+        }
+      }
 
       ctx.restore();
     }
@@ -1311,6 +1518,22 @@ class Renderer {
     if (gameState.ammoDrops) {
       mCtx.fillStyle = '#facc15';
       for (const drop of gameState.ammoDrops) {
+        mCtx.beginPath();
+        mCtx.arc(drop.x * scaleX, drop.y * scaleY, 2.5, 0, Math.PI * 2);
+        mCtx.fill();
+      }
+    }
+
+    // Monster Drops on Minimap (Loot reward dots)
+    if (gameState.monsterDrops) {
+      for (const drop of gameState.monsterDrops) {
+        mCtx.fillStyle = drop.dropType === 'ammo'
+          ? '#fbbf24'
+          : drop.dropType === 'heal'
+          ? '#10b981'
+          : drop.subType === 'move_speed'
+          ? '#06b6d4'
+          : '#f97316';
         mCtx.beginPath();
         mCtx.arc(drop.x * scaleX, drop.y * scaleY, 2.5, 0, Math.PI * 2);
         mCtx.fill();

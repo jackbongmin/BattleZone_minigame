@@ -24,10 +24,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const hudStaminaText = document.getElementById('hudStaminaText');
   const hudStaminaFill = document.getElementById('hudStaminaFill');
   const cooldownDot = document.getElementById('cooldownDot');
-  const cooldownLabel = document.getElementById('cooldownLabel');
   const slotWeapon1 = document.getElementById('slotWeapon1');
   const slotWeapon2 = document.getElementById('slotWeapon2');
   const hudAmmoText = document.getElementById('hudAmmoText');
+  const hudAmmoBadge = document.getElementById('hudAmmoBadge');
   const safeZoneBadge = document.getElementById('safeZoneBadge');
   const hudBuffsContainer = document.getElementById('hudBuffsContainer');
   const leaderboardBody = document.getElementById('leaderboardBody');
@@ -39,6 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const soundToggleBtn = document.getElementById('soundToggleBtn');
 
   // DOM Elements - Chat Box
+  const chatContainer = document.getElementById('chatContainer');
   const chatMessages = document.getElementById('chatMessages');
   const chatForm = document.getElementById('chatForm');
   const chatInput = document.getElementById('chatInput');
@@ -139,11 +140,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (currentSelectedWeapon === 1) {
       if (slotWeapon1) slotWeapon1.classList.add('active');
       if (slotWeapon2) slotWeapon2.classList.remove('active');
-      if (cooldownLabel) cooldownLabel.textContent = '검 쿨타임';
     } else {
       if (slotWeapon1) slotWeapon1.classList.remove('active');
       if (slotWeapon2) slotWeapon2.classList.add('active');
-      if (cooldownLabel) cooldownLabel.textContent = '원거리 쿨타임';
     }
   }
 
@@ -211,6 +210,9 @@ document.addEventListener('DOMContentLoaded', () => {
     hudAvatarDot.style.backgroundColor = selectedColor;
     hudNickname.textContent = nicknameInput.value.trim();
 
+    // Reset leaderboard cleanly on connection
+    updateLeaderboard([]);
+
     // Setup weapon slot buttons & key switching
     if (slotWeapon1) slotWeapon1.addEventListener('click', () => selectWeapon(1));
     if (slotWeapon2) slotWeapon2.addEventListener('click', () => selectWeapon(2));
@@ -253,10 +255,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     chatInput.addEventListener('focus', () => {
       window.inputHandler.setChatting(true);
+      if (chatContainer) chatContainer.classList.add('active');
     });
 
     chatInput.addEventListener('blur', () => {
       window.inputHandler.setChatting(false);
+      if (chatContainer) chatContainer.classList.remove('active');
     });
 
     // Start 30Hz input sending loop
@@ -349,7 +353,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // Process events (sounds, damage numbers, sparks, slashes, item/ammo pickups, kill messages)
+    // Process events (sounds, damage numbers, sparks, slashes, item/ammo pickups, monster drop pickups, kill messages)
     if (state.events && state.events.length > 0) {
       for (const ev of state.events) {
         if (ev.type === 'slash') {
@@ -382,6 +386,25 @@ document.addEventListener('DOMContentLoaded', () => {
           if (ev.playerId === myPlayerId) {
             window.soundManager.playAmmoPickup();
           }
+        } else if (ev.type === 'monster_drop_pickup') {
+          if (window.particleSystem) {
+            let effectColor = '#fbbf24';
+            if (ev.dropType === 'heal') effectColor = '#10b981';
+            else if (ev.subType === 'move_speed') effectColor = '#06b6d4';
+            else if (ev.subType === 'attack_boost') effectColor = '#f59e0b';
+            window.particleSystem.spawnItemEffect(ev.x, ev.y, ev.text, effectColor);
+          }
+          if (ev.playerId === myPlayerId) {
+            if (ev.dropType === 'ammo') {
+              window.soundManager.playAmmoPickup();
+            } else {
+              window.soundManager.playItemPickup();
+            }
+          }
+        } else if (ev.type === 'monster_drop_spawn') {
+          if (window.particleSystem) {
+            window.particleSystem.spawnDust(ev.x, ev.y);
+          }
         } else if (ev.type === 'player_shot') {
           if (window.particleSystem) {
             window.particleSystem.spawnMuzzleFlash(ev.x, ev.y, ev.angle, '#fef08a');
@@ -402,13 +425,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!inGame || !myPlayerId) return;
 
-    // Update Local Player HUD
+    // Update Local Player HUD (Minimal HUD style)
     const myPlayer = state.players.find((p) => p.id === myPlayerId);
     if (myPlayer) {
       // HP Bar
       const hpPct = Math.max(0, (myPlayer.hp / myPlayer.maxHp) * 100);
       hudHpFill.style.width = `${hpPct}%`;
-      hudHpText.textContent = `${myPlayer.hp} / ${myPlayer.maxHp}`;
+      hudHpText.textContent = `${myPlayer.hp}`;
+      hudHpText.title = `체력: ${myPlayer.hp} / ${myPlayer.maxHp}`;
       if (hpPct <= 25) {
         hudHpFill.classList.add('low');
       } else {
@@ -418,15 +442,20 @@ document.addEventListener('DOMContentLoaded', () => {
       // Stamina Bar
       const staminaPct = Math.max(0, (myPlayer.stamina / myPlayer.maxStamina) * 100);
       hudStaminaFill.style.width = `${staminaPct}%`;
-      hudStaminaText.textContent = `${myPlayer.stamina} / ${myPlayer.maxStamina}`;
+      hudStaminaText.textContent = `${myPlayer.stamina}`;
+      hudStaminaText.title = `스태미나: ${myPlayer.stamina} / ${myPlayer.maxStamina}`;
 
       // Ammo & Weapon slots UI
+      const currentAmmoVal = myPlayer.ammo !== undefined ? myPlayer.ammo : 18;
+      const maxAmmoVal = myPlayer.maxAmmo || 30;
       if (hudAmmoText) {
-        hudAmmoText.textContent = `${myPlayer.ammo !== undefined ? myPlayer.ammo : 18} / ${myPlayer.maxAmmo || 30}`;
-        if ((myPlayer.ammo !== undefined ? myPlayer.ammo : 18) <= 0) {
-          hudAmmoText.classList.add('empty');
+        hudAmmoText.textContent = `${currentAmmoVal}/${maxAmmoVal}`;
+      }
+      if (hudAmmoBadge) {
+        if (currentAmmoVal <= 0) {
+          hudAmmoBadge.classList.add('empty');
         } else {
-          hudAmmoText.classList.remove('empty');
+          hudAmmoBadge.classList.remove('empty');
         }
       }
 
@@ -436,16 +465,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentSelectedWeapon === 1) {
           if (slotWeapon1) slotWeapon1.classList.add('active');
           if (slotWeapon2) slotWeapon2.classList.remove('active');
-          if (cooldownLabel) cooldownLabel.textContent = '검 쿨타임';
         } else {
           if (slotWeapon1) slotWeapon1.classList.remove('active');
           if (slotWeapon2) slotWeapon2.classList.add('active');
-          if (cooldownLabel) cooldownLabel.textContent = '원거리 쿨타임';
         }
       }
 
       // Kills badge
-      hudKills.textContent = myPlayer.kills || 0;
+      hudKills.textContent = myPlayer.kills ?? 0;
 
       // Safe Zone Indicator
       if (myPlayer.inSafeZone) {
@@ -466,6 +493,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const sec = Math.ceil(myPlayer.buffs.moveSpeed);
             buffsHtml += `<div class="hud-buff-pill hud-buff-spd"><span>💨 신속 (이속 1.7배)</span><span>${sec}s</span></div>`;
           }
+          if (myPlayer.buffs.attackBoost > 0) {
+            const sec = Math.ceil(myPlayer.buffs.attackBoost);
+            buffsHtml += `<div class="hud-buff-pill hud-buff-dmg"><span>🔥 분노 (공격 1.5배)</span><span>${sec}s</span></div>`;
+          }
         }
         hudBuffsContainer.innerHTML = buffsHtml;
       }
@@ -478,9 +509,9 @@ document.addEventListener('DOMContentLoaded', () => {
       // Death & Respawn overlay
       if (myPlayer.isDead) {
         respawnOverlay.style.display = 'flex';
-        respawnCountdownText.textContent = myPlayer.respawnCountdown;
+        respawnCountdownText.textContent = myPlayer.respawnCountdown ?? 0;
         const totalRespawnSec = 10;
-        const ratio = Math.max(0, myPlayer.respawnCountdown / totalRespawnSec);
+        const ratio = Math.max(0, (myPlayer.respawnCountdown ?? 0) / totalRespawnSec);
         respawnBarFill.style.width = `${ratio * 100}%`;
       } else {
         respawnOverlay.style.display = 'none';
@@ -502,15 +533,17 @@ document.addEventListener('DOMContentLoaded', () => {
       cooldownDot.textContent = 'READY';
     }
 
-    // Leaderboard update
-    updateLeaderboard(state.leaderboard);
+    // Leaderboard update with guaranteed null safety
+    updateLeaderboard(state.leaderboard || []);
   });
 
   function updateLeaderboard(list = []) {
-    leaderboardPlayerCount.textContent = `${list.length}/10`;
+    if (!Array.isArray(list)) list = [];
+    const validList = list.filter((item) => item && typeof item === 'object');
+    leaderboardPlayerCount.textContent = `${validList.length}/10`;
     leaderboardBody.innerHTML = '';
 
-    list.forEach((entry, idx) => {
+    validList.forEach((entry, idx) => {
       const tr = document.createElement('tr');
       if (entry.id === myPlayerId) {
         tr.classList.add('me');
@@ -524,15 +557,26 @@ document.addEventListener('DOMContentLoaded', () => {
       const deadTag = entry.isDead ? ' <span style="opacity: 0.6">🪦</span>' : '';
       const safeTag = entry.inSafeZone ? ' <span style="font-size:0.7rem; color:#facc15;">🛡️</span>' : '';
 
+      const nickname = (entry.nickname != null && typeof entry.nickname === 'string' && entry.nickname.trim() !== '')
+        ? entry.nickname.trim()
+        : 'Player';
+      const score = (typeof entry.score === 'number' && !isNaN(entry.score)) ? entry.score : 0;
+      const color = (entry.color && typeof entry.color === 'string') ? entry.color : '#3b82f6';
+
+      // XSS safe display
+      const tempDiv = document.createElement('div');
+      tempDiv.textContent = nickname;
+      const safeNickname = tempDiv.innerHTML;
+
       tr.innerHTML = `
         <td><span class="rank-badge ${idx === 0 ? 'gold' : ''}">${rankDisplay}</span></td>
         <td>
           <div class="nick-cell">
-            <span class="player-tag-dot" style="background-color: ${entry.color}"></span>
-            <span>${entry.nickname}${safeTag}${deadTag}</span>
+            <span class="player-tag-dot" style="background-color: ${color}"></span>
+            <span>${safeNickname}${safeTag}${deadTag}</span>
           </div>
         </td>
-        <td class="text-right"><strong>${entry.score}</strong></td>
+        <td class="text-right"><strong>${score}</strong></td>
       `;
       leaderboardBody.appendChild(tr);
     });

@@ -107,4 +107,18 @@ module.exports = {
       RESPAWN_DELAY: 7000,
     },
   },
+
+  // Monster Kill Drop Reward System
+  MONSTER_DROPS: {
+    CHANCE_NONE: 35, // 35% nothing
+    CHANCE_AMMO_2: 35, // 35% 2 bullets
+    CHANCE_AMMO_6: 10, // 10% 6 bullets
+    CHANCE_BUFF: 20, // 20% random buff
+    LIFETIME: 30000, // 30 seconds lifetime before disappearing
+    PICKUP_RADIUS: 24,
+    BUFF_SPEED_DURATION: 7000, // 7 seconds (1.7x speed)
+    BUFF_ATTACK_DURATION: 8000, // 8 seconds (1.5x attack damage)
+    BUFF_ATTACK_MULTIPLIER: 1.5,
+    BUFF_HEAL_AMOUNT: 35, // +35 HP instant recovery
+  },
 };

@@ -81,9 +81,39 @@ class GameManager {
     }
   }
 
+  handleMonsterKill(killer, monster) {
+    const scoreBonus = monster.conf ? monster.conf.SCORE : (monster.score || 10);
+    if (killer) {
+      killer.score = (killer.score ?? 0) + scoreBonus;
+      killer.kills = (killer.kills ?? 0) + 1;
+      this.events.push({
+        type: 'kill',
+        killerNickname: killer.nickname,
+        victimNickname: monster.name,
+        scoreBonus: scoreBonus,
+        message: `🎯 [${killer.nickname}] 님이 [${monster.name}] 처치! (+${scoreBonus}점)`,
+      });
+    }
+
+    // 몬스터 처치 보상 드롭 시스템 (Server-Authoritative 확률 계산 및 스폰)
+    const drop = this.itemManager.spawnMonsterDrop(monster.x, monster.y);
+    if (drop) {
+      this.events.push({
+        type: 'monster_drop_spawn',
+        x: drop.x,
+        y: drop.y,
+        dropType: drop.dropType,
+        subType: drop.subType,
+        name: drop.name,
+      });
+    }
+  }
+
   handlePlayerAttack(socketId) {
     const player = this.players.get(socketId);
     if (!player || player.isDead) return;
+
+    const dmgMultiplier = player.getDamageMultiplier ? player.getDamageMultiplier() : 1.0;
 
     if (player.selectedWeapon === 2) {
       // ===== RANGED WEAPON (BOW / GUN - Consumes 1 Ammo) =====
@@ -97,6 +127,8 @@ class GameManager {
       const spawnX = player.x + Math.cos(player.angle) * spawnDist;
       const spawnY = player.y + Math.sin(player.angle) * spawnDist;
 
+      const rangedDamage = Math.round(config.PLAYER.RANGED_DAMAGE * dmgMultiplier);
+
       const playerProj = new Projectile(
         `pp_${this.projIdCounter++}`,
         spawnX,
@@ -106,7 +138,7 @@ class GameManager {
         'player',
         {
           color: player.color,
-          damage: config.PLAYER.RANGED_DAMAGE,
+          damage: rangedDamage,
           speed: config.PLAYER.RANGED_SPEED,
           radius: config.PLAYER.RANGED_RADIUS,
           lifetime: config.PLAYER.RANGED_LIFETIME,
@@ -147,6 +179,9 @@ class GameManager {
       return;
     }
 
+    const pvpDamage = Math.round(config.PLAYER.PVP_DAMAGE * dmgMultiplier);
+    const monsterDamage = Math.round(config.PLAYER.MONSTER_DAMAGE * dmgMultiplier);
+
     // 1. Check PvP damage on other alive players (who are NOT in Safe Zone)
     for (const [otherId, target] of this.players.entries()) {
       if (otherId === socketId || target.isDead || target.inSafeZone) continue;
@@ -161,19 +196,19 @@ class GameManager {
         while (angleDiff > Math.PI) angleDiff = Math.abs(angleDiff - Math.PI * 2);
 
         if (angleDiff <= halfArc + 0.3) {
-          const dmgResult = target.takeDamage(config.PLAYER.PVP_DAMAGE, player.id);
+          const dmgResult = target.takeDamage(pvpDamage, player.id);
           this.events.push({
             type: 'hit',
             targetType: 'player',
             targetId: target.id,
             x: target.x,
             y: target.y,
-            damage: config.PLAYER.PVP_DAMAGE,
+            damage: pvpDamage,
           });
 
           if (dmgResult.died) {
-            player.score += config.PLAYER.KILL_SCORE;
-            player.kills += 1;
+            player.score = (player.score ?? 0) + config.PLAYER.KILL_SCORE;
+            player.kills = (player.kills ?? 0) + 1;
             this.events.push({
               type: 'kill',
               killerNickname: player.nickname,
@@ -200,25 +235,18 @@ class GameManager {
         while (angleDiff > Math.PI) angleDiff = Math.abs(angleDiff - Math.PI * 2);
 
         if (angleDiff <= halfArc + 0.3) {
-          const dmgResult = monster.takeDamage(config.PLAYER.MONSTER_DAMAGE, player.id);
+          const dmgResult = monster.takeDamage(monsterDamage, player.id);
           this.events.push({
             type: 'hit',
             targetType: 'monster',
             targetId: monster.id,
             x: monster.x,
             y: monster.y,
-            damage: config.PLAYER.MONSTER_DAMAGE,
+            damage: monsterDamage,
           });
 
           if (dmgResult.died) {
-            player.score += dmgResult.score;
-            this.events.push({
-              type: 'kill',
-              killerNickname: player.nickname,
-              victimNickname: monster.name,
-              scoreBonus: dmgResult.score,
-              message: `🎯 [${player.nickname}] 님이 [${monster.name}] 처치! (+${dmgResult.score}점)`,
-            });
+            this.handleMonsterKill(player, monster);
           }
         }
       }
@@ -312,16 +340,8 @@ class GameManager {
               damage: proj.damage,
             });
 
-            if (died && shooter) {
-              shooter.score += monster.score;
-              shooter.kills += 1;
-              this.events.push({
-                type: 'kill',
-                killerNickname: shooter.nickname,
-                victimNickname: monster.name,
-                scoreBonus: monster.score,
-                message: `🎯 [${shooter.nickname}] 님이 [${monster.name}] 처치! (+${monster.score}점)`,
-              });
+            if (died) {
+              this.handleMonsterKill(shooter, monster);
             }
             break;
           }
@@ -351,8 +371,8 @@ class GameManager {
             });
 
             if (dmgResult.died && shooter) {
-              shooter.score += config.PLAYER.KILL_SCORE;
-              shooter.kills += 1;
+              shooter.score = (shooter.score ?? 0) + config.PLAYER.KILL_SCORE;
+              shooter.kills = (shooter.kills ?? 0) + 1;
               this.events.push({
                 type: 'kill',
                 killerNickname: shooter.nickname,
@@ -370,18 +390,19 @@ class GameManager {
     // Filter out expired / dead projectiles
     this.projectiles = this.projectiles.filter((p) => !p.isDead);
 
-    // 5. Generate Leaderboard (Sorted by score desc)
+    // 5. Generate Leaderboard (Sorted by score desc) with strict null-checking & fallback defaults
     const leaderboard = Array.from(this.players.values())
+      .filter((p) => p && p.id)
       .map((p) => ({
         id: p.id,
-        nickname: p.nickname,
-        color: p.color,
-        score: p.score,
-        kills: p.kills,
-        isDead: p.isDead,
-        inSafeZone: p.inSafeZone,
+        nickname: (p.nickname && typeof p.nickname === 'string') ? p.nickname : 'Player',
+        color: p.color || '#3b82f6',
+        score: (typeof p.score === 'number' && !isNaN(p.score)) ? p.score : 0,
+        kills: (typeof p.kills === 'number' && !isNaN(p.kills)) ? p.kills : 0,
+        isDead: !!p.isDead,
+        inSafeZone: !!p.inSafeZone,
       }))
-      .sort((a, b) => b.score - a.score);
+      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
     // 6. Broadcast game snapshot to all clients
     const payload = {
@@ -390,6 +411,7 @@ class GameManager {
       players: Array.from(this.players.values()).map((p) => p.serialize()),
       items: this.itemManager.serialize(),
       ammoDrops: this.itemManager.serializeAmmoDrops(),
+      monsterDrops: this.itemManager.serializeMonsterDrops(),
       monsters: this.monsters.map((m) => m.serialize()),
       projectiles: this.projectiles.map((p) => p.serialize()),
       leaderboard,
