@@ -870,6 +870,11 @@ class Renderer {
     ctx.save();
     ctx.translate(monster.x, monster.y);
 
+    const isFlashing = window.particleSystem && window.particleSystem.isFlashing(monster.id);
+    if (isFlashing) {
+      ctx.translate((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6);
+    }
+
     // Shadow
     ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
     ctx.beginPath();
@@ -991,6 +996,16 @@ class Renderer {
       ctx.fill();
     }
 
+    // Hit flash overlay
+    if (isFlashing) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+      ctx.beginPath();
+      ctx.arc(0, 0, monster.radius * 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
     // Overhead Tag & HP Bar
     const barW = 44;
     const barH = 5;
@@ -1095,6 +1110,11 @@ class Renderer {
       this.drawTombstone(ctx, player);
       ctx.restore();
       return;
+    }
+
+    const isFlashing = window.particleSystem && window.particleSystem.isFlashing(player.id);
+    if (isFlashing) {
+      ctx.translate((Math.random() - 0.5) * 5, (Math.random() - 0.5) * 5);
     }
 
     // Walking animation cycle
@@ -1292,6 +1312,16 @@ class Renderer {
 
     ctx.restore();
 
+    // Hit flash overlay
+    if (isFlashing) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.beginPath();
+      ctx.arc(0, 0, player.radius * 1.15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
     // 3) Overhead Nameplate, Buff Status, HP/Stamina Bars, and Chat Bubble
     this.drawPlayerOverhead(ctx, player, isLocal);
 
@@ -1299,36 +1329,56 @@ class Renderer {
   }
 
   drawPlayerOverhead(ctx, player, isLocal) {
-    const barW = 58;
+    const barW = 60;
     const barH = 7;
     const barX = -barW / 2;
-    const barY = -player.radius - 22;
+    const barY = -player.radius - 18;
 
-    // --- 1. Overhead Nickname ---
-    ctx.font = '800 13px Pretendard, sans-serif';
+    // --- 1. Overhead Nickname Badge (High-Visibility Dark Pill) ---
+    const displayName = isLocal ? `★ [나] ${player.nickname}` : player.nickname;
+    ctx.font = '800 12px Pretendard, -apple-system, sans-serif';
     ctx.textAlign = 'center';
-    ctx.textBaseline = 'bottom';
+    ctx.textBaseline = 'middle';
 
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 3.5;
-    ctx.lineJoin = 'round';
-    ctx.strokeText(player.nickname, 0, barY - 5);
+    const textMetrics = ctx.measureText(displayName);
+    const pillW = Math.max(barW + 6, textMetrics.width + 16);
+    const pillH = 20;
+    const pillX = -pillW / 2;
+    const pillY = barY - 24;
 
-    ctx.fillStyle = isLocal ? '#38bdf8' : '#ffffff';
-    ctx.fillText(player.nickname, 0, barY - 5);
+    // Badge Shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+    drawRoundedRect(ctx, pillX + 1.5, pillY + 1.5, pillW, pillH, 6);
+    ctx.fill();
+
+    // Badge Fill (Dark slate)
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+    drawRoundedRect(ctx, pillX, pillY, pillW, pillH, 6);
+    ctx.fill();
+
+    // Badge Border (Bright neon cyan for local player, subtle border for others)
+    ctx.strokeStyle = isLocal ? '#38bdf8' : (player.color || 'rgba(255, 255, 255, 0.35)');
+    ctx.lineWidth = isLocal ? 2 : 1.2;
+    drawRoundedRect(ctx, pillX, pillY, pillW, pillH, 6);
+    ctx.stroke();
+
+    // Badge Text
+    ctx.fillStyle = isLocal ? '#38bdf8' : '#f8fafc';
+    ctx.fillText(displayName, 0, pillY + pillH / 2);
 
     // --- 2. Overhead Buff Badges ---
-    let badgeY = barY - 20;
-    if (player.buffs && (player.buffs.atkSpeed > 0 || player.buffs.moveSpeed > 0)) {
+    let badgeY = pillY - 5;
+    if (player.buffs && (player.buffs.atkSpeed > 0 || player.buffs.moveSpeed > 0 || player.buffs.attackBoost > 0)) {
       ctx.font = '800 11px Pretendard, sans-serif';
       let buffText = '';
       if (player.buffs.atkSpeed > 0) buffText += `⚡공속(${player.buffs.atkSpeed}s) `;
-      if (player.buffs.moveSpeed > 0) buffText += `💨이속(${player.buffs.moveSpeed}s)`;
+      if (player.buffs.moveSpeed > 0) buffText += `💨이속(${player.buffs.moveSpeed}s) `;
+      if (player.buffs.attackBoost > 0) buffText += `🔥분노(${player.buffs.attackBoost}s)`;
       ctx.fillStyle = '#fde047';
       ctx.strokeStyle = '#000000';
       ctx.lineWidth = 2.5;
-      ctx.strokeText(buffText, 0, badgeY);
-      ctx.fillText(buffText, 0, badgeY);
+      ctx.strokeText(buffText.trim(), 0, badgeY);
+      ctx.fillText(buffText.trim(), 0, badgeY);
       badgeY -= 14;
     }
 
@@ -1370,16 +1420,31 @@ class Renderer {
     }
 
     // --- 5. Overhead Chat Bubble ---
-    const chatData = player.chatMessage;
-    if (chatData && chatData.text) {
-      const now = Date.now();
-      const elapsed = now - chatData.time;
-      const duration = 5000;
+    const chatBubble =
+      (window.chatBubbles && window.chatBubbles.get(player.id)) ||
+      player.chatBubble ||
+      player.chatMessage;
 
-      if (elapsed < duration) {
-        const remaining = duration - elapsed;
-        const alpha = remaining < 1000 ? remaining / 1000 : 1;
-        this.drawChatBubble(ctx, chatData.text, 0, badgeY - 6, alpha);
+    if (chatBubble && chatBubble.text) {
+      let alpha = 1;
+      if (chatBubble.startTime) {
+        const elapsed = performance.now() - chatBubble.startTime;
+        const duration = chatBubble.duration || 5000;
+        if (elapsed < duration) {
+          const remaining = duration - elapsed;
+          alpha = remaining < 800 ? remaining / 800 : 1;
+        } else {
+          alpha = 0;
+        }
+      } else if (chatBubble.time) {
+        const elapsed = Math.max(0, Date.now() - chatBubble.time);
+        if (elapsed < 5000) {
+          alpha = (5000 - elapsed) < 800 ? (5000 - elapsed) / 800 : 1;
+        }
+      }
+
+      if (alpha > 0.01) {
+        this.drawChatBubble(ctx, chatBubble.text, 0, badgeY - 8, alpha);
       }
     }
   }
@@ -1390,48 +1455,59 @@ class Renderer {
   drawChatBubble(ctx, text, x, y, alpha = 1) {
     ctx.save();
     ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
-    ctx.font = '700 12px Pretendard, sans-serif';
+    ctx.font = '700 12px Pretendard, -apple-system, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    const textWidth = ctx.measureText(text).width;
-    const padX = 12;
-    const bubbleW = Math.max(52, textWidth + padX * 2);
-    const bubbleH = 26;
+    let displayText = text;
+    if (displayText.length > 36) {
+      displayText = displayText.substring(0, 34) + '...';
+    }
+
+    const textWidth = ctx.measureText(displayText).width;
+    const padX = 14;
+    const bubbleW = Math.max(54, textWidth + padX * 2);
+    const bubbleH = 28;
     const bubbleX = x - bubbleW / 2;
     const bubbleY = y - bubbleH;
 
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-    drawRoundedRect(ctx, bubbleX + 2, bubbleY + 2, bubbleW, bubbleH, 8);
+    // Shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    drawRoundedRect(ctx, bubbleX + 2, bubbleY + 2.5, bubbleW, bubbleH, 8);
     ctx.fill();
 
+    // Bubble Fill
     ctx.fillStyle = '#ffffff';
     drawRoundedRect(ctx, bubbleX, bubbleY, bubbleW, bubbleH, 8);
     ctx.fill();
 
+    // Tail Triangle (Fill)
     ctx.beginPath();
-    ctx.moveTo(x - 6, bubbleY + bubbleH - 1);
+    ctx.moveTo(x - 7, bubbleY + bubbleH - 1);
     ctx.lineTo(x, bubbleY + bubbleH + 7);
-    ctx.lineTo(x + 6, bubbleY + bubbleH - 1);
+    ctx.lineTo(x + 7, bubbleY + bubbleH - 1);
     ctx.closePath();
     ctx.fillStyle = '#ffffff';
     ctx.fill();
 
-    ctx.strokeStyle = '#1e293b';
-    ctx.lineWidth = 1.8;
+    // Border
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 2;
     drawRoundedRect(ctx, bubbleX, bubbleY, bubbleW, bubbleH, 8);
     ctx.stroke();
 
+    // Tail Triangle (Border)
     ctx.beginPath();
-    ctx.moveTo(x - 6, bubbleY + bubbleH);
+    ctx.moveTo(x - 7, bubbleY + bubbleH);
     ctx.lineTo(x, bubbleY + bubbleH + 7);
-    ctx.lineTo(x + 6, bubbleY + bubbleH);
-    ctx.strokeStyle = '#1e293b';
-    ctx.lineWidth = 1.8;
+    ctx.lineTo(x + 7, bubbleY + bubbleH);
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 2;
     ctx.stroke();
 
+    // Text Content
     ctx.fillStyle = '#0f172a';
-    ctx.fillText(text, x, bubbleY + bubbleH / 2);
+    ctx.fillText(displayText, x, bubbleY + bubbleH / 2);
 
     ctx.restore();
   }

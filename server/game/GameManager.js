@@ -199,6 +199,7 @@ class GameManager {
           const dmgResult = target.takeDamage(pvpDamage, player.id);
           this.events.push({
             type: 'hit',
+            attackerId: player.id,
             targetType: 'player',
             targetId: target.id,
             x: target.x,
@@ -238,6 +239,7 @@ class GameManager {
           const dmgResult = monster.takeDamage(monsterDamage, player.id);
           this.events.push({
             type: 'hit',
+            attackerId: player.id,
             targetType: 'monster',
             targetId: monster.id,
             x: monster.x,
@@ -306,6 +308,7 @@ class GameManager {
             player.takeDamage(proj.damage, proj.shooterId);
             this.events.push({
               type: 'hit',
+              attackerId: proj.shooterId,
               targetType: 'player',
               targetId: player.id,
               x: player.x,
@@ -333,6 +336,7 @@ class GameManager {
             const died = monster.takeDamage(proj.damage, proj.shooterId);
             this.events.push({
               type: 'hit',
+              attackerId: proj.shooterId,
               targetType: 'monster',
               targetId: monster.id,
               x: monster.x,
@@ -363,6 +367,7 @@ class GameManager {
             const dmgResult = target.takeDamage(proj.damage, proj.shooterId);
             this.events.push({
               type: 'hit',
+              attackerId: proj.shooterId,
               targetType: 'player',
               targetId: target.id,
               x: target.x,

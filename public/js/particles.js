@@ -6,34 +6,50 @@ class ParticleSystem {
     this.particles = [];
     this.floatingTexts = [];
     this.slashes = [];
+    this.hitFlashes = new Map(); // targetId -> timer
     this.shakeIntensity = 0;
     this.shakeDuration = 0;
     this.shakeOffsetX = 0;
     this.shakeOffsetY = 0;
   }
 
-  // Trigger screen shake
-  triggerShake(intensity = 6, duration = 0.15) {
-    this.shakeIntensity = intensity;
-    this.shakeDuration = duration;
+  // Trigger screen shake with punchy impulse
+  triggerShake(intensity = 7, duration = 0.18) {
+    this.shakeIntensity = Math.max(this.shakeIntensity, intensity);
+    this.shakeDuration = Math.max(this.shakeDuration, duration);
+  }
+
+  // Full impact hit handler with visual flash, sparks, and damage text
+  triggerHit(targetId, x, y, damage = 0, isCrit = false) {
+    this.triggerShake(isCrit ? 9 : 7, 0.18);
+    if (targetId) {
+      this.hitFlashes.set(targetId, 0.14); // 140ms white/red hit flash
+    }
+    this.spawnHitSparks(x, y, isCrit ? '#ef4444' : '#f59e0b', isCrit ? 24 : 18);
+    if (damage > 0) {
+      this.spawnDamageText(x, y, damage, isCrit);
+    }
+  }
+
+  isFlashing(targetId) {
+    return targetId ? (this.hitFlashes.get(targetId) || 0) > 0 : false;
   }
 
   // Spawn spark burst on hit
-  spawnHitSparks(x, y, color = '#f59e0b', count = 15) {
-    this.triggerShake(4, 0.12);
+  spawnHitSparks(x, y, color = '#f59e0b', count = 18) {
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = 70 + Math.random() * 180;
+      const speed = 90 + Math.random() * 220;
       this.particles.push({
         x,
         y,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
-        radius: 2.5 + Math.random() * 3.5,
+        radius: 3 + Math.random() * 4,
         color: Math.random() > 0.3 ? color : '#ffffff',
         alpha: 1,
-        life: 0.3 + Math.random() * 0.25,
-        maxLife: 0.55,
+        life: 0.28 + Math.random() * 0.24,
+        maxLife: 0.52,
       });
     }
   }
@@ -88,18 +104,19 @@ class ParticleSystem {
     });
   }
 
-  // Spawn floating damage numbers
+  // Spawn punchy floating damage numbers with pop-in scale
   spawnDamageText(x, y, damage, isCrit = false) {
     this.floatingTexts.push({
-      x: x + (Math.random() - 0.5) * 24,
-      y: y - 25,
+      x: x + (Math.random() - 0.5) * 20,
+      y: y - 28,
       text: `-${damage}`,
       color: isCrit ? '#ef4444' : '#fbbf24',
-      fontSize: isCrit ? 24 : 18,
-      vy: -60,
+      fontSize: isCrit ? 26 : 20,
+      scale: 1.35,
+      vy: -75,
       alpha: 1,
-      life: 0.85,
-      maxLife: 0.85,
+      life: 0.9,
+      maxLife: 0.9,
     });
   }
 
@@ -179,6 +196,16 @@ class ParticleSystem {
       }
     }
 
+    // Hit flashes decay
+    for (const [id, timer] of this.hitFlashes.entries()) {
+      const rem = timer - dt;
+      if (rem <= 0) {
+        this.hitFlashes.delete(id);
+      } else {
+        this.hitFlashes.set(id, rem);
+      }
+    }
+
     // 1. Update particles
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
@@ -196,6 +223,10 @@ class ParticleSystem {
     for (let i = this.floatingTexts.length - 1; i >= 0; i--) {
       const ft = this.floatingTexts[i];
       ft.y += ft.vy * dt;
+      ft.vy += 80 * dt; // gravity deceleration for pop-up feel
+      if (ft.scale && ft.scale > 1) {
+        ft.scale = Math.max(1, ft.scale - dt * 2.8);
+      }
       ft.life -= dt;
       ft.alpha = Math.max(0, ft.life / ft.maxLife);
 
@@ -265,17 +296,22 @@ class ParticleSystem {
       ctx.restore();
     }
 
-    // Draw floating texts
+    // Draw floating texts with pop-in scale
     for (const ft of this.floatingTexts) {
       ctx.save();
       ctx.globalAlpha = ft.alpha;
-      ctx.font = `800 ${ft.fontSize}px Rajdhani, Pretendard, sans-serif`;
+      ctx.translate(ft.x, ft.y);
+      const scale = ft.scale || 1;
+      ctx.scale(scale, scale);
+      ctx.font = `900 ${ft.fontSize}px Rajdhani, Pretendard, sans-serif`;
       ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
       ctx.fillStyle = ft.color;
       ctx.strokeStyle = '#000000';
-      ctx.lineWidth = 3.5;
-      ctx.strokeText(ft.text, ft.x, ft.y);
-      ctx.fillText(ft.text, ft.x, ft.y);
+      ctx.lineWidth = 4;
+      ctx.lineJoin = 'round';
+      ctx.strokeText(ft.text, 0, 0);
+      ctx.fillText(ft.text, 0, 0);
       ctx.restore();
     }
   }

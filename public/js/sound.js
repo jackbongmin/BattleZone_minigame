@@ -34,52 +34,137 @@ class SoundManager {
     return this.isMuted;
   }
 
-  // Attack swing whoosh sound
+  // Cached white noise buffer for crisp physical impact crunch
+  getNoiseBuffer() {
+    if (this._noiseBuffer) return this._noiseBuffer;
+    if (!this.ctx) return null;
+    const bufferSize = this.ctx.sampleRate * 0.5; // 0.5s buffer
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    this._noiseBuffer = buffer;
+    return buffer;
+  }
+
+  // Attack swing whoosh sound (crisp whoosh)
   playSlash() {
     if (this.isMuted) return;
     this.ensureContext();
     if (!this.ctx) return;
 
     const t = this.ctx.currentTime;
+
+    // 1. Tonal whoosh
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
 
     osc.type = 'triangle';
-    osc.frequency.setValueAtTime(320, t);
-    osc.frequency.exponentialRampToValueAtTime(80, t + 0.15);
+    osc.frequency.setValueAtTime(380, t);
+    osc.frequency.exponentialRampToValueAtTime(70, t + 0.16);
 
-    gain.gain.setValueAtTime(0.25, t);
-    gain.gain.linearRampToValueAtTime(0.01, t + 0.15);
+    gain.gain.setValueAtTime(0.32, t);
+    gain.gain.linearRampToValueAtTime(0.01, t + 0.16);
 
     osc.connect(gain);
     gain.connect(this.ctx.destination);
 
     osc.start(t);
-    osc.stop(t + 0.16);
+    osc.stop(t + 0.17);
+
+    // 2. Air friction noise
+    const noiseBuf = this.getNoiseBuffer();
+    if (noiseBuf) {
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = noiseBuf;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(1200, t);
+      filter.frequency.exponentialRampToValueAtTime(300, t + 0.14);
+      filter.Q.setValueAtTime(1.5, t);
+
+      const nGain = this.ctx.createGain();
+      nGain.gain.setValueAtTime(0.18, t);
+      nGain.gain.linearRampToValueAtTime(0.01, t + 0.14);
+
+      noise.connect(filter);
+      filter.connect(nGain);
+      nGain.connect(this.ctx.destination);
+
+      noise.start(t);
+      noise.stop(t + 0.15);
+    }
   }
 
-  // Punch / Hit impact sound
-  playHit() {
+  // Punchy heavy hit impact sound (Deep bass thud + crunchy physical smack)
+  playHit(isCrit = false) {
     if (this.isMuted) return;
     this.ensureContext();
     if (!this.ctx) return;
 
     const t = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
 
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(180, t);
-    osc.frequency.exponentialRampToValueAtTime(40, t + 0.12);
+    // Layer 1: Sub-bass punch (thud)
+    const bassOsc = this.ctx.createOscillator();
+    const bassGain = this.ctx.createGain();
 
-    gain.gain.setValueAtTime(0.4, t);
-    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.12);
+    bassOsc.type = 'sine';
+    const startFreq = isCrit ? 140 : 160;
+    const endFreq = isCrit ? 24 : 35;
+    bassOsc.frequency.setValueAtTime(startFreq, t);
+    bassOsc.frequency.exponentialRampToValueAtTime(endFreq, t + 0.18);
 
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    const bassVol = isCrit ? 0.65 : 0.48;
+    bassGain.gain.setValueAtTime(bassVol, t);
+    bassGain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
 
-    osc.start(t);
-    osc.stop(t + 0.13);
+    bassOsc.connect(bassGain);
+    bassGain.connect(this.ctx.destination);
+
+    bassOsc.start(t);
+    bassOsc.stop(t + 0.19);
+
+    // Layer 2: Crunch impact snap (noise burst)
+    const noiseBuf = this.getNoiseBuffer();
+    if (noiseBuf) {
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = noiseBuf;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(isCrit ? 700 : 950, t);
+      filter.Q.setValueAtTime(2.2, t);
+
+      const nGain = this.ctx.createGain();
+      nGain.gain.setValueAtTime(isCrit ? 0.42 : 0.32, t);
+      nGain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+
+      noise.connect(filter);
+      filter.connect(nGain);
+      nGain.connect(this.ctx.destination);
+
+      noise.start(t);
+      noise.stop(t + 0.09);
+    }
+
+    // Layer 3: Sharp blade slice / blunt impact click
+    const clickOsc = this.ctx.createOscillator();
+    const clickGain = this.ctx.createGain();
+
+    clickOsc.type = 'sawtooth';
+    clickOsc.frequency.setValueAtTime(320, t);
+    clickOsc.frequency.exponentialRampToValueAtTime(80, t + 0.09);
+
+    clickGain.gain.setValueAtTime(0.25, t);
+    clickGain.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+
+    clickOsc.connect(clickGain);
+    clickGain.connect(this.ctx.destination);
+
+    clickOsc.start(t);
+    clickOsc.stop(t + 0.1);
   }
 
   // Projectile launch sound

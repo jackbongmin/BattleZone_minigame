@@ -62,8 +62,9 @@ document.addEventListener('DOMContentLoaded', () => {
   let lastTimestamp = performance.now();
   let lastChatSentTime = 0;
 
-  // Persistent chat bubbles map (playerId -> { text, time })
+  // Persistent chat bubbles map (playerId -> { text, startTime, duration })
   const chatBubbles = new Map();
+  window.chatBubbles = chatBubbles;
 
   // 1. Color Palette Selection
   const colorBtns = colorPalette.querySelectorAll('.color-btn');
@@ -282,15 +283,18 @@ document.addEventListener('DOMContentLoaded', () => {
       socket.emit('chat_message', { text });
 
       // Immediate local chat bubble display on local player
-      chatBubbles.set(myPlayerId, {
+      const bubble = {
         text,
-        time: Date.now(),
-      });
+        startTime: performance.now(),
+        duration: 5000,
+      };
+      chatBubbles.set(myPlayerId, bubble);
 
-      if (latestGameState) {
+      if (latestGameState && latestGameState.players) {
         const me = latestGameState.players.find((p) => p.id === myPlayerId);
         if (me) {
-          me.chatMessage = { text, time: Date.now() };
+          me.chatBubble = bubble;
+          me.chatMessage = bubble;
         }
       }
 
@@ -323,16 +327,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Auto scroll
     chatMessages.scrollTop = chatMessages.scrollHeight;
 
-    // 2. Set chat bubble on player
-    chatBubbles.set(msg.playerId, {
+    // 2. Set chat bubble on player with monotonic local performance.now()
+    const bubble = {
       text: msg.text,
-      time: Date.now(),
-    });
+      startTime: performance.now(),
+      duration: 5000,
+    };
+    chatBubbles.set(msg.playerId, bubble);
 
     if (latestGameState && latestGameState.players) {
       const targetP = latestGameState.players.find((p) => p.id === msg.playerId);
       if (targetP) {
-        targetP.chatMessage = { text: msg.text, time: Date.now() };
+        targetP.chatBubble = bubble;
+        targetP.chatMessage = bubble;
       }
     }
   });
@@ -341,14 +348,32 @@ document.addEventListener('DOMContentLoaded', () => {
   socket.on('gameState', (state) => {
     latestGameState = state;
 
-    // Sync persistent chat bubbles onto players
+    // Sync persistent chat bubbles onto players using client-controlled monotonic timer
     if (state.players) {
+      const nowPerf = performance.now();
       for (const p of state.players) {
-        // Prefer server chatMessage if present, else fallback to chatBubbles map
-        if (!p.chatMessage) {
-          const bubble = chatBubbles.get(p.id);
-          if (bubble && Date.now() - bubble.time < 5000) {
+        // If server sent a chatMessage text and we don't have it tracked, register it locally
+        if (p.chatMessage && p.chatMessage.text) {
+          const existing = chatBubbles.get(p.id);
+          if (!existing || existing.text !== p.chatMessage.text) {
+            chatBubbles.set(p.id, {
+              text: p.chatMessage.text,
+              startTime: nowPerf,
+              duration: 5000,
+            });
+          }
+        }
+
+        const bubble = chatBubbles.get(p.id);
+        if (bubble) {
+          const elapsed = nowPerf - bubble.startTime;
+          if (elapsed < bubble.duration) {
+            p.chatBubble = bubble;
             p.chatMessage = bubble;
+          } else {
+            chatBubbles.delete(p.id);
+            p.chatBubble = null;
+            p.chatMessage = null;
           }
         }
       }
@@ -362,10 +387,20 @@ document.addEventListener('DOMContentLoaded', () => {
             window.particleSystem.spawnSlash(ev.x, ev.y, ev.angle, ev.color, ev.range);
           }
         } else if (ev.type === 'hit') {
-          window.particleSystem.spawnHitSparks(ev.x, ev.y);
-          window.particleSystem.spawnDamageText(ev.x, ev.y, ev.damage);
-          if (ev.targetId === myPlayerId) {
-            window.soundManager.playHit();
+          const isRelatedToMe = (ev.attackerId === myPlayerId || ev.targetId === myPlayerId);
+          const isCrit = (ev.damage > 25);
+
+          if (window.particleSystem) {
+            window.particleSystem.triggerHit(ev.targetId, ev.x, ev.y, ev.damage, isCrit);
+            // If hit wasn't done by or to local player, reduce camera shake slightly
+            if (!isRelatedToMe) {
+              window.particleSystem.screenShake = Math.max(window.particleSystem.screenShake - 4, 0);
+            }
+          }
+
+          // Trigger heavy hit punch & crunch sound whenever player hits or gets hit
+          if (window.soundManager && isRelatedToMe) {
+            window.soundManager.playHit(isCrit);
           }
         } else if (ev.type === 'item_pickup') {
           if (window.particleSystem) {
