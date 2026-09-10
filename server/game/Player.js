@@ -61,8 +61,15 @@ class Player {
 
   getScale() {
     const s = Math.max(0, this.score ?? 0);
-    // Balanced scaling: Starts at 1.0, reaches ~1.27 at 500, ~1.38 at 1000, ~1.54 at 2000, max 1.65
-    return Math.min(1.65, 1.0 + Math.sqrt(s) * 0.012);
+    // Impactful & noticeable growth:
+    // 0 pts -> 1.0x (base)
+    // 50 pts (1 kill) -> 1.25x (+25% bigger, immediately noticeable)
+    // 100 pts (2 kills) -> 1.36x
+    // 200 pts -> 1.51x (+50% bigger, strong presence)
+    // 400 pts -> 1.72x (mini-boss)
+    // 800 pts -> 2.02x (colossal titan)
+    // Max cap: 2.3x
+    return Math.min(2.3, 1.0 + Math.sqrt(s) * 0.036);
   }
 
   updateRadius() {

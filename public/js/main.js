@@ -178,8 +178,8 @@ document.addEventListener('DOMContentLoaded', () => {
     socket.emit('player_attack');
 
     // Client-side prediction & visual/sound FX
-    const pScale = me.scale || (me.radius ? me.radius / 20 : 1.0);
-    const pRadius = me.radius || (20 * pScale);
+    const pScale = me.scale || (me.radius ? me.radius / 22 : 1.0);
+    const pRadius = me.radius || (22 * pScale);
 
     if (isRanged) {
       window.soundManager.playRangedShoot();

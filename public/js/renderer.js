@@ -1175,7 +1175,7 @@ class Renderer {
       return;
     }
 
-    const scale = player.scale || (player.radius ? player.radius / 20 : 1.0);
+    const scale = player.scale || (player.radius ? player.radius / 22 : 1.0);
 
     const isFlashing = window.particleSystem && window.particleSystem.isFlashing(player.id);
     if (isFlashing) {
@@ -1192,7 +1192,7 @@ class Renderer {
 
     // --- 1st Place (Leader) Radiant Golden Aura Glow Effect ---
     if (isLeader) {
-      this.drawLeaderGlow(ctx, player.radius || (20 * scale));
+      this.drawLeaderGlow(ctx, player.radius || (22 * scale));
     }
 
     // --- Active Buff Aura Rings ---
@@ -1204,7 +1204,7 @@ class Renderer {
         ctx.strokeStyle = 'rgba(6, 182, 212, 0.65)';
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.ellipse(0, 10 * scale, (player.radius || 20) * 1.4, (player.radius || 20) * 0.8, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 10 * scale, (player.radius || 22) * 1.4, (player.radius || 22) * 0.8, 0, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
       }
@@ -1216,7 +1216,7 @@ class Renderer {
         ctx.strokeStyle = 'rgba(245, 158, 11, 0.75)';
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.arc(0, 0, (player.radius || 20) + 7, 0, Math.PI * 2);
+        ctx.arc(0, 0, (player.radius || 22) + 7, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
       }
@@ -1225,7 +1225,7 @@ class Renderer {
     // 1) Ground Shadow
     ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
     ctx.beginPath();
-    ctx.ellipse(0, 10 * scale, (player.radius || 20) * 1.1, (player.radius || 20) * 0.6, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 10 * scale, (player.radius || 22) * 1.1, (player.radius || 22) * 0.6, 0, 0, Math.PI * 2);
     ctx.fill();
 
     // 2) Humanoid Body rotated toward player.angle (Scaled with score)
@@ -1393,7 +1393,7 @@ class Renderer {
       ctx.save();
       ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
       ctx.beginPath();
-      ctx.arc(0, 0, (player.radius || 20) * 1.15, 0, Math.PI * 2);
+      ctx.arc(0, 0, (player.radius || 22) * 1.15, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
@@ -1405,7 +1405,7 @@ class Renderer {
   }
 
   drawPlayerOverhead(ctx, player, isLocal, isLeader = false) {
-    const currentRadius = player.radius || 20;
+    const currentRadius = player.radius || 22;
     const barW = Math.max(54, currentRadius * 2.5);
     const barH = 6;
     const barX = -barW / 2;
