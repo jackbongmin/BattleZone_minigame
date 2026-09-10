@@ -184,20 +184,29 @@ class Renderer {
       }
     }
 
+    // 7. Leader ID (Top ranker with score > 0 glows)
+    const leaderId = gameState.leaderPlayerId || (
+      gameState.leaderboard &&
+      gameState.leaderboard.length > 0 &&
+      (gameState.leaderboard[0].score ?? 0) > 0
+        ? gameState.leaderboard[0].id
+        : null
+    );
+
     // 7. Other Players with smooth interpolation
     if (gameState.players) {
       for (const player of gameState.players) {
         if (player.id !== localPlayerId) {
           const sm = this.getSmoothPosition(player.id, player.x, player.y, player.angle, dt, player.isDead);
           const smPlayer = Object.assign({}, player, { x: sm.x, y: sm.y, angle: sm.angle });
-          this.drawHumanoidPlayer(ctx, smPlayer, false);
+          this.drawHumanoidPlayer(ctx, smPlayer, false, player.id === leaderId);
         }
       }
     }
 
     // 8. Local Player on Top
     if (localPlayer) {
-      this.drawHumanoidPlayer(ctx, localPlayer, true);
+      this.drawHumanoidPlayer(ctx, localPlayer, true, localPlayer.id === leaderId);
     }
 
     // 9. Visual FX & Particles
@@ -1062,12 +1071,16 @@ class Renderer {
   }
 
   /**
-   * 6.1 Player Projectile (Tracer Bullet / Energy Bolt)
+   * 6.1 Player Projectile (Tracer Bullet / Energy Bolt) - Scaled with player radius
    */
   drawPlayerBullet(ctx, proj) {
     ctx.save();
     ctx.translate(proj.x, proj.y);
     ctx.rotate(proj.angle);
+
+    const r = proj.radius || 6;
+    const bulletScale = r / 6;
+    ctx.scale(bulletScale, bulletScale);
 
     const bulletColor = proj.color || '#38bdf8';
 
@@ -1075,34 +1088,84 @@ class Renderer {
     ctx.fillStyle = bulletColor;
     ctx.globalAlpha = 0.4;
     ctx.beginPath();
-    ctx.ellipse(-8, 0, 16, proj.radius * 1.6, 0, 0, Math.PI * 2);
+    ctx.ellipse(-8, 0, 16, 6 * 1.6, 0, 0, Math.PI * 2);
     ctx.fill();
 
     // Inner Bullet Core (Elongated Sharp Tracer)
     ctx.globalAlpha = 1;
     ctx.fillStyle = bulletColor;
     ctx.beginPath();
-    ctx.moveTo(-10, -proj.radius);
-    ctx.lineTo(8, -proj.radius * 0.6);
+    ctx.moveTo(-10, -6);
+    ctx.lineTo(8, -6 * 0.6);
     ctx.lineTo(14, 0);
-    ctx.lineTo(8, proj.radius * 0.6);
-    ctx.lineTo(-10, proj.radius);
+    ctx.lineTo(8, 6 * 0.6);
+    ctx.lineTo(-10, 6);
     ctx.closePath();
     ctx.fill();
 
     // Bright White Hot Tip
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.ellipse(3, 0, 7, proj.radius * 0.5, 0, 0, Math.PI * 2);
+    ctx.ellipse(3, 0, 7, 3, 0, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.restore();
   }
 
   /**
-   * 7 & 8. Humanoid Character with Buff Auras and Chat Bubbles
+   * 1st Place (Leader) Radiant Golden Aura Glow Effect
    */
-  drawHumanoidPlayer(ctx, player, isLocal = false) {
+  drawLeaderGlow(ctx, radius) {
+    const t = this.animTime;
+    ctx.save();
+
+    // 1) Pulsing Celestial Golden Radial Aura
+    const pulse = 1 + Math.sin(t * 3.5) * 0.12;
+    const glowR = radius * 1.6 * pulse;
+    const grad = ctx.createRadialGradient(0, 0, radius * 0.3, 0, 0, glowR);
+    grad.addColorStop(0, 'rgba(253, 224, 71, 0.45)');
+    grad.addColorStop(0.5, 'rgba(245, 158, 11, 0.22)');
+    grad.addColorStop(1, 'rgba(245, 158, 11, 0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, glowR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2) Rotating Starburst Sun Rays
+    ctx.save();
+    ctx.rotate(t * 0.85);
+    ctx.strokeStyle = 'rgba(254, 240, 138, 0.55)';
+    ctx.lineWidth = 2.2;
+    for (let i = 0; i < 8; i++) {
+      const ang = (i * Math.PI) / 4;
+      const rInner = radius * 1.05;
+      const rOuter = radius * 1.45 + Math.sin(t * 4 + i) * 4;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(ang) * rInner, Math.sin(ang) * rInner);
+      ctx.lineTo(Math.cos(ang) * rOuter, Math.sin(ang) * rOuter);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // 3) Glimmer Sparkles (Rising golden motes)
+    ctx.fillStyle = '#fef08a';
+    for (let i = 0; i < 4; i++) {
+      const spAng = t * 1.4 + (i * Math.PI) / 2;
+      const spDist = radius * 0.95 + Math.cos(t * 2 + i) * 6;
+      const spX = Math.cos(spAng) * spDist;
+      const spY = Math.sin(spAng) * spDist - 4;
+      ctx.beginPath();
+      ctx.arc(spX, spY, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * 7 & 8. Humanoid Character with Buff Auras, Leader Glow, and Chat Bubbles
+   */
+  drawHumanoidPlayer(ctx, player, isLocal = false, isLeader = false) {
     ctx.save();
     ctx.translate(player.x, player.y);
 
@@ -1112,9 +1175,11 @@ class Renderer {
       return;
     }
 
+    const scale = player.scale || (player.radius ? player.radius / 20 : 1.0);
+
     const isFlashing = window.particleSystem && window.particleSystem.isFlashing(player.id);
     if (isFlashing) {
-      ctx.translate((Math.random() - 0.5) * 5, (Math.random() - 0.5) * 5);
+      ctx.translate((Math.random() - 0.5) * 5 * scale, (Math.random() - 0.5) * 5 * scale);
     }
 
     // Walking animation cycle
@@ -1123,6 +1188,11 @@ class Renderer {
     if (isMoving) {
       walkCycle += player.isRunning ? 0.35 : 0.22;
       this.walkCycles.set(player.id, walkCycle);
+    }
+
+    // --- 1st Place (Leader) Radiant Golden Aura Glow Effect ---
+    if (isLeader) {
+      this.drawLeaderGlow(ctx, player.radius || (20 * scale));
     }
 
     // --- Active Buff Aura Rings ---
@@ -1134,7 +1204,7 @@ class Renderer {
         ctx.strokeStyle = 'rgba(6, 182, 212, 0.65)';
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.ellipse(0, 10, player.radius * 1.4, player.radius * 0.8, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 10 * scale, (player.radius || 20) * 1.4, (player.radius || 20) * 0.8, 0, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
       }
@@ -1146,7 +1216,7 @@ class Renderer {
         ctx.strokeStyle = 'rgba(245, 158, 11, 0.75)';
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.arc(0, 0, player.radius + 7, 0, Math.PI * 2);
+        ctx.arc(0, 0, (player.radius || 20) + 7, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
       }
@@ -1155,19 +1225,25 @@ class Renderer {
     // 1) Ground Shadow
     ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
     ctx.beginPath();
-    ctx.ellipse(0, 10, player.radius * 1.1, player.radius * 0.6, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 10 * scale, (player.radius || 20) * 1.1, (player.radius || 20) * 0.6, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // 2) Humanoid Body rotated toward player.angle
+    // 2) Humanoid Body rotated toward player.angle (Scaled with score)
     ctx.save();
+    ctx.scale(scale, scale);
     ctx.rotate(player.angle);
+
+    if (isLeader) {
+      ctx.shadowColor = '#facc15';
+      ctx.shadowBlur = 18;
+    }
 
     // Boots
     const footSwing = isMoving ? Math.sin(walkCycle) * 7 : 0;
     ctx.fillStyle = '#1e293b';
-    drawRoundedRect(ctx, -8 + footSwing, -player.radius * 0.75, 12, 6, 3);
+    drawRoundedRect(ctx, -8 + footSwing, -15, 12, 6, 3);
     ctx.fill();
-    drawRoundedRect(ctx, -8 - footSwing, player.radius * 0.45, 12, 6, 3);
+    drawRoundedRect(ctx, -8 - footSwing, 9, 12, 6, 3);
     ctx.fill();
 
     // Torso / Armor
@@ -1310,64 +1386,88 @@ class Renderer {
     ctx.arc(5, 3.5, 1.2, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.restore();
+    ctx.restore(); // Restores scaled body rotation
 
     // Hit flash overlay
     if (isFlashing) {
       ctx.save();
       ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
       ctx.beginPath();
-      ctx.arc(0, 0, player.radius * 1.15, 0, Math.PI * 2);
+      ctx.arc(0, 0, (player.radius || 20) * 1.15, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
 
     // 3) Overhead Nameplate, Buff Status, HP/Stamina Bars, and Chat Bubble
-    this.drawPlayerOverhead(ctx, player, isLocal);
+    this.drawPlayerOverhead(ctx, player, isLocal, isLeader);
 
-    ctx.restore();
+    ctx.restore(); // Restores player translation
   }
 
-  drawPlayerOverhead(ctx, player, isLocal) {
-    const barW = 60;
-    const barH = 7;
+  drawPlayerOverhead(ctx, player, isLocal, isLeader = false) {
+    const currentRadius = player.radius || 20;
+    const barW = Math.max(54, currentRadius * 2.5);
+    const barH = 6;
     const barX = -barW / 2;
-    const barY = -player.radius - 18;
+    const barY = -currentRadius - 16;
 
-    // --- 1. Overhead Nickname Badge (High-Visibility Dark Pill) ---
-    const displayName = isLocal ? `★ [나] ${player.nickname}` : player.nickname;
-    ctx.font = '800 12px Pretendard, -apple-system, sans-serif';
+    // --- 1. Overhead Nickname (Stroke + Fill directly above HP bar, exactly like monster!) ---
+    const rawName = (player.nickname && player.nickname.trim()) || (player.name && player.name.trim()) || (isLocal ? '나' : 'Player');
+    let displayName = rawName;
+    if (isLeader) {
+      displayName = isLocal ? `👑 [1등/나] ${rawName}` : `👑 [1등] ${rawName}`;
+    } else if (isLocal) {
+      displayName = `★ [나] ${rawName}`;
+    }
+
+    ctx.font = '800 12px Pretendard, sans-serif';
     ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
+    ctx.textBaseline = 'bottom';
 
-    const textMetrics = ctx.measureText(displayName);
-    const pillW = Math.max(barW + 6, textMetrics.width + 16);
-    const pillH = 20;
-    const pillX = -pillW / 2;
-    const pillY = barY - 24;
+    // Black stroke outline
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 3.5;
+    ctx.lineJoin = 'round';
+    ctx.strokeText(displayName, 0, barY - 4);
 
-    // Badge Shadow
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-    drawRoundedRect(ctx, pillX + 1.5, pillY + 1.5, pillW, pillH, 6);
+    // Bright text fill
+    if (isLeader) {
+      ctx.fillStyle = '#fde047'; // Radiant gold for 1st place
+    } else if (isLocal) {
+      ctx.fillStyle = '#38bdf8'; // Cyan for Local Player
+    } else {
+      ctx.fillStyle = '#ffffff'; // White for other players
+    }
+    ctx.fillText(displayName, 0, barY - 4);
+
+    // --- 2. HP Bar ---
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    drawRoundedRect(ctx, barX - 1, barY - 1, barW + 2, barH + 2, 3);
     ctx.fill();
 
-    // Badge Fill (Dark slate)
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-    drawRoundedRect(ctx, pillX, pillY, pillW, pillH, 6);
+    const hpRatio = Math.max(0, player.hp / player.maxHp);
+    ctx.fillStyle = hpRatio > 0.5 ? '#10b981' : hpRatio > 0.25 ? '#f59e0b' : '#ef4444';
+    if (barW * hpRatio > 0) {
+      drawRoundedRect(ctx, barX, barY, Math.max(3, barW * hpRatio), barH, 2);
+      ctx.fill();
+    }
+
+    // --- 3. Stamina Bar ---
+    const stamH = 3.5;
+    const stamY = barY + barH + 2.5;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    drawRoundedRect(ctx, barX - 1, stamY - 1, barW + 2, stamH + 2, 2);
     ctx.fill();
 
-    // Badge Border (Bright neon cyan for local player, subtle border for others)
-    ctx.strokeStyle = isLocal ? '#38bdf8' : (player.color || 'rgba(255, 255, 255, 0.35)');
-    ctx.lineWidth = isLocal ? 2 : 1.2;
-    drawRoundedRect(ctx, pillX, pillY, pillW, pillH, 6);
-    ctx.stroke();
+    const stamRatio = Math.max(0, player.stamina / player.maxStamina);
+    ctx.fillStyle = '#06b6d4';
+    if (barW * stamRatio > 0) {
+      drawRoundedRect(ctx, barX, stamY, Math.max(2, barW * stamRatio), stamH, 1.5);
+      ctx.fill();
+    }
 
-    // Badge Text
-    ctx.fillStyle = isLocal ? '#38bdf8' : '#f8fafc';
-    ctx.fillText(displayName, 0, pillY + pillH / 2);
-
-    // --- 2. Overhead Buff Badges ---
-    let badgeY = pillY - 5;
+    // --- 4. Overhead Buff Badges ---
+    let badgeY = barY - 20;
     if (player.buffs && (player.buffs.atkSpeed > 0 || player.buffs.moveSpeed > 0 || player.buffs.attackBoost > 0)) {
       ctx.font = '800 11px Pretendard, sans-serif';
       let buffText = '';
@@ -1391,32 +1491,6 @@ class Renderer {
       ctx.strokeText('🛡️ SAFE', 0, badgeY);
       ctx.fillText('🛡️ SAFE', 0, badgeY);
       badgeY -= 14;
-    }
-
-    // --- 3. HP Bar ---
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-    drawRoundedRect(ctx, barX - 1, barY - 1, barW + 2, barH + 2, 3);
-    ctx.fill();
-
-    const hpRatio = Math.max(0, player.hp / player.maxHp);
-    ctx.fillStyle = hpRatio > 0.5 ? '#10b981' : hpRatio > 0.25 ? '#f59e0b' : '#ef4444';
-    if (barW * hpRatio > 0) {
-      drawRoundedRect(ctx, barX, barY, Math.max(3, barW * hpRatio), barH, 2);
-      ctx.fill();
-    }
-
-    // --- 4. Stamina Bar ---
-    const stamH = 4;
-    const stamY = barY + barH + 3;
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-    drawRoundedRect(ctx, barX - 1, stamY - 1, barW + 2, stamH + 2, 2);
-    ctx.fill();
-
-    const stamRatio = Math.max(0, player.stamina / player.maxStamina);
-    ctx.fillStyle = '#06b6d4';
-    if (barW * stamRatio > 0) {
-      drawRoundedRect(ctx, barX, stamY, Math.max(2, barW * stamRatio), stamH, 1.5);
-      ctx.fill();
     }
 
     // --- 5. Overhead Chat Bubble ---

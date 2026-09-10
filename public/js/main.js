@@ -178,17 +178,21 @@ document.addEventListener('DOMContentLoaded', () => {
     socket.emit('player_attack');
 
     // Client-side prediction & visual/sound FX
+    const pScale = me.scale || (me.radius ? me.radius / 20 : 1.0);
+    const pRadius = me.radius || (20 * pScale);
+
     if (isRanged) {
       window.soundManager.playRangedShoot();
+      const muzzleDist = pRadius + 8;
       window.particleSystem.spawnMuzzleFlash(
-        me.x + Math.cos(window.inputHandler.angle) * 28,
-        me.y + Math.sin(window.inputHandler.angle) * 28,
+        me.x + Math.cos(window.inputHandler.angle) * muzzleDist,
+        me.y + Math.sin(window.inputHandler.angle) * muzzleDist,
         window.inputHandler.angle
       );
     } else {
       window.soundManager.playSlash();
       me.isAttacking = true;
-      window.particleSystem.spawnSlash(me.x, me.y, window.inputHandler.angle, me.color, 94);
+      window.particleSystem.spawnSlash(me.x, me.y, window.inputHandler.angle, me.color, 94 * pScale);
     }
   }
 

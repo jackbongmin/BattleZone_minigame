@@ -55,6 +55,18 @@ class Player {
     this.lastAttackTime = 0;
     this.isAttacking = false;
     this.attackAnimTimer = 0;
+
+    this.updateRadius();
+  }
+
+  getScale() {
+    const s = Math.max(0, this.score ?? 0);
+    // Balanced scaling: Starts at 1.0, reaches ~1.27 at 500, ~1.38 at 1000, ~1.54 at 2000, max 1.65
+    return Math.min(1.65, 1.0 + Math.sqrt(s) * 0.012);
+  }
+
+  updateRadius() {
+    this.radius = Math.round(config.PLAYER.RADIUS * this.getScale() * 10) / 10;
   }
 
   setChatMessage(text) {
@@ -178,9 +190,12 @@ class Player {
     this.buffs.attackBoost = 0;
     this.ammo = config.PLAYER.INITIAL_AMMO;
     this.selectedWeapon = 1;
+    this.updateRadius();
   }
 
   update(dt, map) {
+    this.updateRadius();
+
     // Attack animation decay
     if (this.isAttacking) {
       this.attackAnimTimer -= dt;
@@ -268,6 +283,7 @@ class Player {
   }
 
   serialize() {
+    const scale = Math.round(this.getScale() * 100) / 100;
     return {
       id: this.id,
       nickname: this.nickname,
@@ -275,6 +291,8 @@ class Player {
       x: Math.round(this.x * 10) / 10,
       y: Math.round(this.y * 10) / 10,
       angle: Math.round(this.angle * 1000) / 1000,
+      radius: this.radius,
+      scale: scale,
       hp: Math.round(this.hp),
       maxHp: this.maxHp,
       stamina: Math.round(this.stamina),

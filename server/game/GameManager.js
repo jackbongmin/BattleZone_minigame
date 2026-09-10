@@ -123,11 +123,13 @@ class GameManager {
       // Attacks originating from inside the Safe Zone deal NO damage and don't shoot
       if (player.inSafeZone) return;
 
+      const scale = player.getScale ? player.getScale() : 1.0;
       const spawnDist = player.radius + 12;
       const spawnX = player.x + Math.cos(player.angle) * spawnDist;
       const spawnY = player.y + Math.sin(player.angle) * spawnDist;
 
       const rangedDamage = Math.round(config.PLAYER.RANGED_DAMAGE * dmgMultiplier);
+      const projRadius = Math.round(config.PLAYER.RANGED_RADIUS * scale * 10) / 10;
 
       const playerProj = new Projectile(
         `pp_${this.projIdCounter++}`,
@@ -140,7 +142,7 @@ class GameManager {
           color: player.color,
           damage: rangedDamage,
           speed: config.PLAYER.RANGED_SPEED,
-          radius: config.PLAYER.RANGED_RADIUS,
+          radius: projRadius,
           lifetime: config.PLAYER.RANGED_LIFETIME,
         }
       );
@@ -153,6 +155,7 @@ class GameManager {
         y: spawnY,
         angle: player.angle,
         color: player.color,
+        radius: projRadius,
       });
       return;
     }
@@ -160,10 +163,11 @@ class GameManager {
     // ===== MELEE WEAPON (SWORD) =====
     if (!player.triggerAttack()) return;
 
-    const attackRange = config.PLAYER.ATTACK_RANGE; // 94px
+    const scale = player.getScale ? player.getScale() : 1.0;
+    const attackRange = Math.round(config.PLAYER.ATTACK_RANGE * scale); // Range scales proportionally with score
     const halfArc = config.PLAYER.ATTACK_ARC / 2;
 
-    // Broadcast slash animation event with matching 94px range
+    // Broadcast slash animation event with matching range
     this.events.push({
       type: 'slash',
       sourceId: player.id,
@@ -409,6 +413,10 @@ class GameManager {
       }))
       .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
+    const leaderPlayerId = (leaderboard.length > 0 && (leaderboard[0].score ?? 0) > 0)
+      ? leaderboard[0].id
+      : null;
+
     // 6. Broadcast game snapshot to all clients
     const payload = {
       timestamp: now,
@@ -420,6 +428,7 @@ class GameManager {
       monsters: this.monsters.map((m) => m.serialize()),
       projectiles: this.projectiles.map((p) => p.serialize()),
       leaderboard,
+      leaderPlayerId,
       events: this.events,
     };
 
