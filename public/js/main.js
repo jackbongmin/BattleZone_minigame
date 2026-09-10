@@ -1,0 +1,575 @@
+/**
+ * Main Client Game Orchestrator
+ */
+document.addEventListener('DOMContentLoaded', () => {
+  const socket = io();
+
+  // DOM Elements - Lobby
+  const lobbyScreen = document.getElementById('lobbyScreen');
+  const loginForm = document.getElementById('loginForm');
+  const nicknameInput = document.getElementById('nicknameInput');
+  const colorPalette = document.getElementById('colorPalette');
+  const customColorInput = document.getElementById('customColorInput');
+  const joinBtn = document.getElementById('joinBtn');
+  const lobbyError = document.getElementById('lobbyError');
+  const playerCountDisplay = document.getElementById('playerCountDisplay');
+
+  // DOM Elements - In-Game HUD
+  const gameHud = document.getElementById('gameHud');
+  const hudAvatarDot = document.getElementById('hudAvatarDot');
+  const hudNickname = document.getElementById('hudNickname');
+  const hudKills = document.getElementById('hudKills');
+  const hudHpText = document.getElementById('hudHpText');
+  const hudHpFill = document.getElementById('hudHpFill');
+  const hudStaminaText = document.getElementById('hudStaminaText');
+  const hudStaminaFill = document.getElementById('hudStaminaFill');
+  const cooldownDot = document.getElementById('cooldownDot');
+  const cooldownLabel = document.getElementById('cooldownLabel');
+  const slotWeapon1 = document.getElementById('slotWeapon1');
+  const slotWeapon2 = document.getElementById('slotWeapon2');
+  const hudAmmoText = document.getElementById('hudAmmoText');
+  const safeZoneBadge = document.getElementById('safeZoneBadge');
+  const hudBuffsContainer = document.getElementById('hudBuffsContainer');
+  const leaderboardBody = document.getElementById('leaderboardBody');
+  const leaderboardPlayerCount = document.getElementById('leaderboardPlayerCount');
+  const killFeed = document.getElementById('killFeed');
+  const respawnOverlay = document.getElementById('respawnOverlay');
+  const respawnCountdownText = document.getElementById('respawnCountdownText');
+  const respawnBarFill = document.getElementById('respawnBarFill');
+  const soundToggleBtn = document.getElementById('soundToggleBtn');
+
+  // DOM Elements - Chat Box
+  const chatMessages = document.getElementById('chatMessages');
+  const chatForm = document.getElementById('chatForm');
+  const chatInput = document.getElementById('chatInput');
+
+  // Canvas
+  const gameCanvas = document.getElementById('gameCanvas');
+  const minimapCanvas = document.getElementById('minimapCanvas');
+  const renderer = new Renderer(gameCanvas, minimapCanvas);
+
+  // State
+  let myPlayerId = null;
+  let selectedColor = '#3b82f6';
+  let latestGameState = null;
+  let lastAttackSentTime = 0;
+  let currentSelectedWeapon = 1; // 1: Sword, 2: Ranged
+  let meleeCooldownDuration = 750; // 0.75s heavier attack cooldown
+  let rangedCooldownDuration = 420; // 0.42s ranged shot cooldown
+  let lastDryClickTime = 0;
+  let inGame = false;
+  let lastTimestamp = performance.now();
+  let lastChatSentTime = 0;
+
+  // Persistent chat bubbles map (playerId -> { text, time })
+  const chatBubbles = new Map();
+
+  // 1. Color Palette Selection
+  const colorBtns = colorPalette.querySelectorAll('.color-btn');
+  colorBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      colorBtns.forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedColor = btn.dataset.color;
+      customColorInput.value = selectedColor;
+    });
+  });
+
+  customColorInput.addEventListener('input', (e) => {
+    selectedColor = e.target.value;
+    colorBtns.forEach((b) => b.classList.remove('active'));
+  });
+
+  // 2. Sound Toggle
+  soundToggleBtn.addEventListener('click', () => {
+    const isMuted = window.soundManager.toggleMute();
+    soundToggleBtn.textContent = isMuted ? '🔇' : '🔊';
+  });
+
+  // 3. Lobby Status Updates
+  socket.on('lobby_status', (data) => {
+    const current = data.currentPlayers;
+    const max = data.maxPlayers;
+    playerCountDisplay.textContent = `${current} / ${max}명`;
+
+    const indicator = document.querySelector('.status-indicator');
+    if (current >= max) {
+      if (indicator) indicator.classList.add('full');
+      joinBtn.disabled = true;
+      joinBtn.querySelector('span').textContent = '정원 초과 (FULL)';
+    } else {
+      if (indicator) indicator.classList.remove('full');
+      joinBtn.disabled = false;
+      joinBtn.querySelector('span').textContent = '입장하기 (ENTER ARENA)';
+    }
+  });
+
+  // 4. Join Game Form Submission
+  loginForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const nickname = nicknameInput.value.trim();
+    if (!nickname) {
+      showLobbyError('닉네임을 입력해주세요.');
+      return;
+    }
+
+    lobbyError.style.display = 'none';
+    joinBtn.disabled = true;
+    joinBtn.querySelector('span').textContent = '입장 중...';
+
+    // Request to join server
+    socket.emit('join_game', {
+      nickname,
+      color: selectedColor,
+    });
+  });
+
+  function showLobbyError(msg) {
+    lobbyError.textContent = msg;
+    lobbyError.style.display = 'block';
+    joinBtn.disabled = false;
+    joinBtn.querySelector('span').textContent = '입장하기 (ENTER ARENA)';
+  }
+
+  function selectWeapon(weaponId) {
+    currentSelectedWeapon = weaponId === 2 ? 2 : 1;
+    window.inputHandler.setWeapon(currentSelectedWeapon);
+    socket.emit('switch_weapon', { weapon: currentSelectedWeapon });
+
+    if (currentSelectedWeapon === 1) {
+      if (slotWeapon1) slotWeapon1.classList.add('active');
+      if (slotWeapon2) slotWeapon2.classList.remove('active');
+      if (cooldownLabel) cooldownLabel.textContent = '검 쿨타임';
+    } else {
+      if (slotWeapon1) slotWeapon1.classList.remove('active');
+      if (slotWeapon2) slotWeapon2.classList.add('active');
+      if (cooldownLabel) cooldownLabel.textContent = '원거리 쿨타임';
+    }
+  }
+
+  function tryAttack() {
+    if (!inGame || !myPlayerId || !latestGameState) return;
+    const me = latestGameState.players.find((p) => p.id === myPlayerId);
+    if (!me || me.isDead) return;
+
+    const isRanged = currentSelectedWeapon === 2;
+    let baseCooldown = isRanged ? rangedCooldownDuration : meleeCooldownDuration;
+    if (me.buffs && me.buffs.atkSpeed > 0) {
+      baseCooldown = Math.round(baseCooldown * 0.5);
+    }
+
+    const now = Date.now();
+    if (now - lastAttackSentTime < baseCooldown) return;
+
+    // Check ammo if ranged weapon
+    if (isRanged && (me.ammo === undefined ? 0 : me.ammo) <= 0) {
+      if (now - lastDryClickTime > 350) {
+        lastDryClickTime = now;
+        window.soundManager.playEmptyClick();
+        window.particleSystem.spawnFloatingText(me.x, me.y - 30, '탄약 부족! (0/30)', '#ef4444');
+      }
+      return;
+    }
+
+    lastAttackSentTime = now;
+
+    // Send attack to server
+    socket.emit('player_attack');
+
+    // Client-side prediction & visual/sound FX
+    if (isRanged) {
+      window.soundManager.playRangedShoot();
+      window.particleSystem.spawnMuzzleFlash(
+        me.x + Math.cos(window.inputHandler.angle) * 28,
+        me.y + Math.sin(window.inputHandler.angle) * 28,
+        window.inputHandler.angle
+      );
+    } else {
+      window.soundManager.playSlash();
+      me.isAttacking = true;
+      window.particleSystem.spawnSlash(me.x, me.y, window.inputHandler.angle, me.color, 94);
+    }
+  }
+
+  // 5. Server response on join
+  socket.on('join_error', (data) => {
+    showLobbyError(data.message || '입장에 실패했습니다.');
+  });
+
+  socket.on('join_success', (data) => {
+    myPlayerId = data.playerId;
+    meleeCooldownDuration = data.playerConfig.attackCooldown || 750;
+    rangedCooldownDuration = data.playerConfig.rangedCooldown || 420;
+    renderer.setMapData(data.map);
+
+    // Transition UI from Lobby to Game
+    lobbyScreen.style.display = 'none';
+    gameHud.style.display = 'block';
+    inGame = true;
+
+    // Set Avatar UI
+    hudAvatarDot.style.backgroundColor = selectedColor;
+    hudNickname.textContent = nicknameInput.value.trim();
+
+    // Setup weapon slot buttons & key switching
+    if (slotWeapon1) slotWeapon1.addEventListener('click', () => selectWeapon(1));
+    if (slotWeapon2) slotWeapon2.addEventListener('click', () => selectWeapon(2));
+    window.inputHandler.onWeaponSwitch((w) => selectWeapon(w));
+
+    // Enable inputs
+    window.inputHandler.enable();
+    window.soundManager.ensureContext();
+
+    // Setup Attack trigger with Client-Side Prediction & Auto-repeat on mouse hold
+    window.inputHandler.onAttack(() => {
+      tryAttack();
+    });
+
+    // Setup Enter key handling for Chat
+    window.inputHandler.onEnter((e) => {
+      if (document.activeElement === chatInput) {
+        sendChat();
+      } else {
+        e.preventDefault();
+        chatInput.focus();
+        window.inputHandler.setChatting(true);
+      }
+    });
+
+    // Chat form submit
+    chatForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      sendChat();
+    });
+
+    // Chat input key handling (Escape to cancel)
+    chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        chatInput.value = '';
+        chatInput.blur();
+        window.inputHandler.setChatting(false);
+      }
+    });
+
+    chatInput.addEventListener('focus', () => {
+      window.inputHandler.setChatting(true);
+    });
+
+    chatInput.addEventListener('blur', () => {
+      window.inputHandler.setChatting(false);
+    });
+
+    // Start 30Hz input sending loop
+    setInterval(() => {
+      if (inGame && window.inputHandler.enabled) {
+        socket.emit('player_input', window.inputHandler.getPayload());
+      }
+    }, 1000 / 30);
+  });
+
+  function sendChat() {
+    const now = Date.now();
+    if (now - lastChatSentTime < 150) return; // Prevent double trigger
+    lastChatSentTime = now;
+
+    const text = chatInput.value.trim();
+    if (text.length > 0) {
+      socket.emit('chat_message', { text });
+
+      // Immediate local chat bubble display on local player
+      chatBubbles.set(myPlayerId, {
+        text,
+        time: Date.now(),
+      });
+
+      if (latestGameState) {
+        const me = latestGameState.players.find((p) => p.id === myPlayerId);
+        if (me) {
+          me.chatMessage = { text, time: Date.now() };
+        }
+      }
+
+      chatInput.value = '';
+    }
+
+    chatInput.blur();
+    window.inputHandler.setChatting(false);
+  }
+
+  // 6. Handle Incoming Chat Broadcast
+  socket.on('chat_broadcast', (msg) => {
+    // 1. Add to chat log
+    const msgEl = document.createElement('div');
+    msgEl.className = 'chat-msg';
+
+    const senderSpan = document.createElement('span');
+    senderSpan.className = 'chat-sender';
+    senderSpan.style.color = msg.color || '#38bdf8';
+    senderSpan.textContent = `[${msg.nickname}]:`;
+
+    const textSpan = document.createElement('span');
+    textSpan.className = 'chat-text';
+    textSpan.textContent = ` ${msg.text}`;
+
+    msgEl.appendChild(senderSpan);
+    msgEl.appendChild(textSpan);
+    chatMessages.appendChild(msgEl);
+
+    // Auto scroll
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+
+    // 2. Set chat bubble on player
+    chatBubbles.set(msg.playerId, {
+      text: msg.text,
+      time: Date.now(),
+    });
+
+    if (latestGameState && latestGameState.players) {
+      const targetP = latestGameState.players.find((p) => p.id === msg.playerId);
+      if (targetP) {
+        targetP.chatMessage = { text: msg.text, time: Date.now() };
+      }
+    }
+  });
+
+  // 7. Handle Server Game State Snapshot Broadcast
+  socket.on('gameState', (state) => {
+    latestGameState = state;
+
+    // Sync persistent chat bubbles onto players
+    if (state.players) {
+      for (const p of state.players) {
+        // Prefer server chatMessage if present, else fallback to chatBubbles map
+        if (!p.chatMessage) {
+          const bubble = chatBubbles.get(p.id);
+          if (bubble && Date.now() - bubble.time < 5000) {
+            p.chatMessage = bubble;
+          }
+        }
+      }
+    }
+
+    // Process events (sounds, damage numbers, sparks, slashes, item/ammo pickups, kill messages)
+    if (state.events && state.events.length > 0) {
+      for (const ev of state.events) {
+        if (ev.type === 'slash') {
+          if (ev.sourceId !== myPlayerId) {
+            window.particleSystem.spawnSlash(ev.x, ev.y, ev.angle, ev.color, ev.range);
+          }
+        } else if (ev.type === 'hit') {
+          window.particleSystem.spawnHitSparks(ev.x, ev.y);
+          window.particleSystem.spawnDamageText(ev.x, ev.y, ev.damage);
+          if (ev.targetId === myPlayerId) {
+            window.soundManager.playHit();
+          }
+        } else if (ev.type === 'item_pickup') {
+          if (window.particleSystem) {
+            const effectColor =
+              ev.itemType === 'health'
+                ? '#10b981'
+                : ev.itemType === 'atk_speed'
+                ? '#f59e0b'
+                : '#06b6d4';
+            window.particleSystem.spawnItemEffect(ev.x, ev.y, ev.text, effectColor);
+          }
+          if (ev.playerId === myPlayerId) {
+            window.soundManager.playItemPickup();
+          }
+        } else if (ev.type === 'ammo_pickup') {
+          if (window.particleSystem) {
+            window.particleSystem.spawnItemEffect(ev.x, ev.y, ev.text, '#fbbf24');
+          }
+          if (ev.playerId === myPlayerId) {
+            window.soundManager.playAmmoPickup();
+          }
+        } else if (ev.type === 'player_shot') {
+          if (window.particleSystem) {
+            window.particleSystem.spawnMuzzleFlash(ev.x, ev.y, ev.angle, '#fef08a');
+          }
+          if (ev.shooterId !== myPlayerId) {
+            window.soundManager.playRangedShoot();
+          }
+        } else if (ev.type === 'projectile_spawn') {
+          window.soundManager.playShoot();
+        } else if (ev.type === 'kill') {
+          addKillFeedItem(ev.message);
+          if (ev.killerNickname === nicknameInput.value.trim()) {
+            window.soundManager.playKill();
+          }
+        }
+      }
+    }
+
+    if (!inGame || !myPlayerId) return;
+
+    // Update Local Player HUD
+    const myPlayer = state.players.find((p) => p.id === myPlayerId);
+    if (myPlayer) {
+      // HP Bar
+      const hpPct = Math.max(0, (myPlayer.hp / myPlayer.maxHp) * 100);
+      hudHpFill.style.width = `${hpPct}%`;
+      hudHpText.textContent = `${myPlayer.hp} / ${myPlayer.maxHp}`;
+      if (hpPct <= 25) {
+        hudHpFill.classList.add('low');
+      } else {
+        hudHpFill.classList.remove('low');
+      }
+
+      // Stamina Bar
+      const staminaPct = Math.max(0, (myPlayer.stamina / myPlayer.maxStamina) * 100);
+      hudStaminaFill.style.width = `${staminaPct}%`;
+      hudStaminaText.textContent = `${myPlayer.stamina} / ${myPlayer.maxStamina}`;
+
+      // Ammo & Weapon slots UI
+      if (hudAmmoText) {
+        hudAmmoText.textContent = `${myPlayer.ammo !== undefined ? myPlayer.ammo : 18} / ${myPlayer.maxAmmo || 30}`;
+        if ((myPlayer.ammo !== undefined ? myPlayer.ammo : 18) <= 0) {
+          hudAmmoText.classList.add('empty');
+        } else {
+          hudAmmoText.classList.remove('empty');
+        }
+      }
+
+      // Sync active weapon slot selection if needed
+      if (myPlayer.selectedWeapon && myPlayer.selectedWeapon !== currentSelectedWeapon) {
+        currentSelectedWeapon = myPlayer.selectedWeapon;
+        if (currentSelectedWeapon === 1) {
+          if (slotWeapon1) slotWeapon1.classList.add('active');
+          if (slotWeapon2) slotWeapon2.classList.remove('active');
+          if (cooldownLabel) cooldownLabel.textContent = '검 쿨타임';
+        } else {
+          if (slotWeapon1) slotWeapon1.classList.remove('active');
+          if (slotWeapon2) slotWeapon2.classList.add('active');
+          if (cooldownLabel) cooldownLabel.textContent = '원거리 쿨타임';
+        }
+      }
+
+      // Kills badge
+      hudKills.textContent = myPlayer.kills || 0;
+
+      // Safe Zone Indicator
+      if (myPlayer.inSafeZone) {
+        safeZoneBadge.style.display = 'block';
+      } else {
+        safeZoneBadge.style.display = 'none';
+      }
+
+      // Active Buff Badges
+      if (hudBuffsContainer) {
+        let buffsHtml = '';
+        if (myPlayer.buffs) {
+          if (myPlayer.buffs.atkSpeed > 0) {
+            const sec = Math.ceil(myPlayer.buffs.atkSpeed);
+            buffsHtml += `<div class="hud-buff-pill hud-buff-atk"><span>⚡ 질풍 (공속 2배)</span><span>${sec}s</span></div>`;
+          }
+          if (myPlayer.buffs.moveSpeed > 0) {
+            const sec = Math.ceil(myPlayer.buffs.moveSpeed);
+            buffsHtml += `<div class="hud-buff-pill hud-buff-spd"><span>💨 신속 (이속 1.7배)</span><span>${sec}s</span></div>`;
+          }
+        }
+        hudBuffsContainer.innerHTML = buffsHtml;
+      }
+
+      // Running dust effect
+      if (myPlayer.isRunning) {
+        window.particleSystem.spawnDust(myPlayer.x, myPlayer.y);
+      }
+
+      // Death & Respawn overlay
+      if (myPlayer.isDead) {
+        respawnOverlay.style.display = 'flex';
+        respawnCountdownText.textContent = myPlayer.respawnCountdown;
+        const totalRespawnSec = 10;
+        const ratio = Math.max(0, myPlayer.respawnCountdown / totalRespawnSec);
+        respawnBarFill.style.width = `${ratio * 100}%`;
+      } else {
+        respawnOverlay.style.display = 'none';
+      }
+    }
+
+    // Cooldown indicator (adapts dynamically to active weapon & attack speed buff)
+    const now = Date.now();
+    const isRanged = currentSelectedWeapon === 2;
+    let currentCooldown = isRanged ? rangedCooldownDuration : meleeCooldownDuration;
+    if (myPlayer && myPlayer.buffs && myPlayer.buffs.atkSpeed > 0) {
+      currentCooldown = Math.round(currentCooldown * 0.5);
+    }
+    if (now - lastAttackSentTime < currentCooldown) {
+      cooldownDot.className = 'cooldown-dot cooling';
+      cooldownDot.textContent = 'WAIT';
+    } else {
+      cooldownDot.className = 'cooldown-dot ready';
+      cooldownDot.textContent = 'READY';
+    }
+
+    // Leaderboard update
+    updateLeaderboard(state.leaderboard);
+  });
+
+  function updateLeaderboard(list = []) {
+    leaderboardPlayerCount.textContent = `${list.length}/10`;
+    leaderboardBody.innerHTML = '';
+
+    list.forEach((entry, idx) => {
+      const tr = document.createElement('tr');
+      if (entry.id === myPlayerId) {
+        tr.classList.add('me');
+      }
+
+      let rankDisplay = `#${idx + 1}`;
+      if (idx === 0) rankDisplay = '👑 1';
+      else if (idx === 1) rankDisplay = '🥈 2';
+      else if (idx === 2) rankDisplay = '🥉 3';
+
+      const deadTag = entry.isDead ? ' <span style="opacity: 0.6">🪦</span>' : '';
+      const safeTag = entry.inSafeZone ? ' <span style="font-size:0.7rem; color:#facc15;">🛡️</span>' : '';
+
+      tr.innerHTML = `
+        <td><span class="rank-badge ${idx === 0 ? 'gold' : ''}">${rankDisplay}</span></td>
+        <td>
+          <div class="nick-cell">
+            <span class="player-tag-dot" style="background-color: ${entry.color}"></span>
+            <span>${entry.nickname}${safeTag}${deadTag}</span>
+          </div>
+        </td>
+        <td class="text-right"><strong>${entry.score}</strong></td>
+      `;
+      leaderboardBody.appendChild(tr);
+    });
+  }
+
+  function addKillFeedItem(text) {
+    const item = document.createElement('div');
+    item.className = 'killfeed-item';
+    item.innerHTML = text;
+    killFeed.appendChild(item);
+
+    setTimeout(() => {
+      item.classList.add('fade-out');
+      setTimeout(() => item.remove(), 500);
+    }, 4500);
+  }
+
+  // 8. Client Render Loop
+  function gameLoop(currentTimestamp) {
+    const dt = Math.min((currentTimestamp - lastTimestamp) / 1000, 0.1);
+    lastTimestamp = currentTimestamp;
+
+    // Continuous attack while left mouse button is held down
+    if (inGame && window.inputHandler && window.inputHandler.mouse && window.inputHandler.mouse.isDown) {
+      tryAttack();
+    }
+
+    if (window.particleSystem) {
+      window.particleSystem.update(dt);
+    }
+
+    if (latestGameState) {
+      renderer.render(latestGameState, myPlayerId);
+    }
+
+    requestAnimationFrame(gameLoop);
+  }
+
+  requestAnimationFrame(gameLoop);
+});

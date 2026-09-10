@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Battle Arena - 2D Top-Down Multiplayer Action Game</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Game Canvas -->
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- Minimap Canvas (Bottom-Right) -->
+  <canvas id="minimapCanvas" width="160" height="160"></canvas>
+
+  <!-- Login / Lobby Overlay -->
+  <div id="lobbyScreen" class="overlay-modal">
+    <div class="lobby-card">
+      <div class="lobby-header">
+        <div class="game-badge">ONLINE MULTIPLAYER</div>
+        <h1 class="game-title">BATTLE <span>ARENA</span></h1>
+        <p class="game-subtitle">탑다운 2D 실시간 서바이벌 멀티플레이어</p>
+      </div>
+
+      <!-- Server Capacity Status -->
+      <div class="server-status-bar">
+        <span class="status-indicator online"></span>
+        <span class="status-text">접속 현황:</span>
+        <strong id="playerCountDisplay">0 / 10명</strong>
+      </div>
+
+      <!-- Error message container -->
+      <div id="lobbyError" class="lobby-error" style="display: none;"></div>
+
+      <form id="loginForm" onsubmit="return false;">
+        <!-- Nickname Input -->
+        <div class="form-group">
+          <label for="nicknameInput">닉네임</label>
+          <input
+            type="text"
+            id="nicknameInput"
+            placeholder="용사의 이름을 입력하세요 (최대 12자)"
+            maxlength="12"
+            autocomplete="off"
+            required
+          />
+        </div>
+
+        <!-- Character Color Picker -->
+        <div class="form-group">
+          <label>캐릭터 색상 선택</label>
+          <div class="color-picker-wrapper">
+            <div class="color-palette" id="colorPalette">
+              <button type="button" class="color-btn active" data-color="#3b82f6" style="--c: #3b82f6;" title="네온 블루"></button>
+              <button type="button" class="color-btn" data-color="#10b981" style="--c: #10b981;" title="에메랄드"></button>
+              <button type="button" class="color-btn" data-color="#ef4444" style="--c: #ef4444;" title="크림슨 레드"></button>
+              <button type="button" class="color-btn" data-color="#f59e0b" style="--c: #f59e0b;" title="앰버 골드"></button>
+              <button type="button" class="color-btn" data-color="#8b5cf6" style="--c: #8b5cf6;" title="바이올렛"></button>
+              <button type="button" class="color-btn" data-color="#ec4899" style="--c: #ec4899;" title="핫핑크"></button>
+              <button type="button" class="color-btn" data-color="#06b6d4" style="--c: #06b6d4;" title="시안"></button>
+              <button type="button" class="color-btn" data-color="#f97316" style="--c: #f97316;" title="오렌지"></button>
+            </div>
+            <div class="custom-color-wrap">
+              <label for="customColorInput" class="custom-color-label">커스텀:</label>
+              <input type="color" id="customColorInput" value="#3b82f6">
+            </div>
+          </div>
+        </div>
+
+        <!-- Join Button -->
+        <button type="submit" id="joinBtn" class="btn-join">
+          <span>입장하기 (ENTER ARENA)</span>
+        </button>
+      </form>
+
+      <!-- Keybinds Guide -->
+      <div class="guide-box">
+        <div class="guide-title">조작 방법</div>
+        <div class="guide-grid">
+          <div class="guide-item"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / 방향키 : 이동</div>
+          <div class="guide-item"><kbd>Space</kbd> : 달리기 (스태미나 소모)</div>
+          <div class="guide-item"><kbd>마우스 좌클릭 (유지)</kbd> : 연속 공격</div>
+          <div class="guide-item"><kbd>1</kbd> : 근접 검 | <kbd>2</kbd> : 원거리 무기 (최대 30발)</div>
+          <div class="guide-item"><kbd>Enter</kbd> : 채팅 입력 및 전송</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- In-Game HUD Overlays -->
+  <div id="gameHud" style="display: none;">
+    <!-- Top Left: Local Player Status -->
+    <div class="hud-player-card">
+      <div class="player-profile-row">
+        <div class="player-avatar-dot" id="hudAvatarDot"></div>
+        <span class="hud-nickname" id="hudNickname">Player</span>
+        <span class="hud-kills-badge">⚔️ <span id="hudKills">0</span> Kills</span>
+      </div>
+
+      <!-- Health Bar -->
+      <div class="hud-bar-container">
+        <div class="bar-label-row">
+          <span>체력 (HP)</span>
+          <span id="hudHpText">100 / 100</span>
+        </div>
+        <div class="bar-track hp-track">
+          <div class="bar-fill hp-fill" id="hudHpFill" style="width: 100%;"></div>
+        </div>
+      </div>
+
+      <!-- Stamina Bar -->
+      <div class="hud-bar-container">
+        <div class="bar-label-row">
+          <span>스태미나</span>
+          <span id="hudStaminaText">100 / 100</span>
+        </div>
+        <div class="bar-track stamina-track">
+          <div class="bar-fill stamina-fill" id="hudStaminaFill" style="width: 100%;"></div>
+        </div>
+      </div>
+
+      <!-- Attack Cooldown Indicator -->
+      <div class="cooldown-indicator-row">
+        <span id="cooldownLabel">공격 쿨타임</span>
+        <div class="cooldown-dot ready" id="cooldownDot">READY</div>
+      </div>
+
+      <!-- Weapon & Ammo Selection Slots (1: Sword, 2: Ranged) -->
+      <div class="hud-weapons-row">
+        <button type="button" class="weapon-slot-btn active" id="slotWeapon1" data-weapon="1">
+          <span class="weapon-key">1</span>
+          <span class="weapon-icon">🗡️</span>
+          <span class="weapon-name">검</span>
+        </button>
+        <button type="button" class="weapon-slot-btn" id="slotWeapon2" data-weapon="2">
+          <span class="weapon-key">2</span>
+          <span class="weapon-icon">🏹</span>
+          <div class="weapon-details">
+            <span class="weapon-name">원거리</span>
+            <span class="weapon-ammo" id="hudAmmoText">18 / 30</span>
+          </div>
+        </button>
+      </div>
+
+      <!-- Safe Zone Status Badge -->
+      <div id="safeZoneBadge" class="safe-zone-badge" style="display: none;">
+        <span>🛡️ 안전지대 보호 중 (무적)</span>
+      </div>
+
+      <!-- Active Buffs Indicator Container -->
+      <div id="hudBuffsContainer" class="hud-buffs-container"></div>
+    </div>
+
+    <!-- Top Right: Real-time Leaderboard -->
+    <div class="hud-leaderboard-card">
+      <div class="leaderboard-header">
+        <span>🏆 순위표 (SCOREBOARD)</span>
+        <span class="leaderboard-count" id="leaderboardPlayerCount">0/10</span>
+      </div>
+      <table class="leaderboard-table">
+        <thead>
+          <tr>
+            <th>순위</th>
+            <th>닉네임</th>
+            <th class="text-right">점수</th>
+          </tr>
+        </thead>
+        <tbody id="leaderboardBody">
+          <!-- Dynamic Leaderboard Rows -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Left Bottom: Kill Logs Feed -->
+    <div class="killfeed-container" id="killFeed"></div>
+
+    <!-- Left Bottom: In-Game Chat Box -->
+    <div class="chat-container" id="chatContainer">
+      <div class="chat-header">
+        <span>💬 실시간 채팅 (Enter)</span>
+      </div>
+      <div class="chat-messages" id="chatMessages">
+        <div class="chat-msg system"><span>[시스템]</span> Enter 키를 눌러 대화를 시작하세요.</div>
+      </div>
+      <form id="chatForm" class="chat-input-form" onsubmit="return false;">
+        <input
+          type="text"
+          id="chatInput"
+          class="chat-input"
+          placeholder="메시지 입력 후 Enter (최대 70자)..."
+          maxlength="70"
+          autocomplete="off"
+        />
+        <button type="submit" id="chatSendBtn" class="chat-send-btn">전송</button>
+      </form>
+    </div>
+
+    <!-- Center: Respawn Screen Modal -->
+    <div id="respawnOverlay" class="respawn-overlay" style="display: none;">
+      <div class="respawn-card">
+        <div class="tombstone-icon">🪦</div>
+        <h2 class="respawn-title">YOU DIED</h2>
+        <p class="respawn-subtitle">체력이 모두 소진되어 묘비 상태가 되었습니다.</p>
+        <div class="respawn-timer-box">
+          <span class="respawn-countdown-num" id="respawnCountdownText">10</span>
+          <span class="respawn-countdown-label">초 후 리스폰됩니다</span>
+        </div>
+        <div class="respawn-bar-wrap">
+          <div class="respawn-bar-fill" id="respawnBarFill"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Audio Mute Toggle Button -->
+    <button id="soundToggleBtn" class="sound-toggle-btn" title="사운드 켜기/끄기">🔊</button>
+  </div>
+
+  <!-- Socket.io client script -->
+  <script src="/socket.io/socket.io.js"></script>
+  <!-- Client Game Scripts -->
+  <script src="/js/sound.js"></script>
+  <script src="/js/particles.js"></script>
+  <script src="/js/camera.js"></script>
+  <script src="/js/input.js"></script>
+  <script src="/js/renderer.js"></script>
+  <script src="/js/main.js"></script>
+</body>
+</html>

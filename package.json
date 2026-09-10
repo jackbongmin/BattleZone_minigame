@@ -1,0 +1,24 @@
+{
+  "name": "topdown-multiplayer-action-game",
+  "version": "1.0.0",
+  "description": "Top-down 2D Multiplayer Web Action Game with Express, Socket.io, and HTML5 Canvas",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js"
+  },
+  "keywords": [
+    "multiplayer",
+    "game",
+    "socket.io",
+    "canvas",
+    "topdown",
+    "action"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5",
+    "socket.io-client": "^4.8.3"
+  }
+}
