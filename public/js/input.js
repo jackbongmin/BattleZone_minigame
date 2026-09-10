@@ -57,7 +57,9 @@ class InputHandler {
   }
 
   setWeapon(weaponId) {
-    this.selectedWeapon = weaponId === 2 ? 2 : 1;
+    const target = weaponId === 2 ? 2 : 1;
+    if (this.selectedWeapon === target) return;
+    this.selectedWeapon = target;
     if (this.onWeaponSwitchCallback) {
       this.onWeaponSwitchCallback(this.selectedWeapon);
     }
@@ -153,6 +155,36 @@ class InputHandler {
     window.addEventListener('contextmenu', (e) => {
       if (this.enabled) e.preventDefault();
     });
+
+    // Mouse wheel weapon switching (Scroll up or down to toggle weapons)
+    let lastWheelTime = 0;
+    window.addEventListener(
+      'wheel',
+      (e) => {
+        if (!this.enabled || this.isChatting) return;
+
+        // Allow scrolling inside chat message log
+        if (e.target && e.target.closest && e.target.closest('#chatMessages')) {
+          return;
+        }
+
+        e.preventDefault();
+
+        const now = Date.now();
+        if (now - lastWheelTime < 110) return; // 110ms throttle to prevent double switching
+        lastWheelTime = now;
+
+        // Wheel down: switch to 2 (or toggle), Wheel up: switch to 1 (or toggle)
+        if (e.deltaY > 0) {
+          const nextWeapon = this.selectedWeapon === 1 ? 2 : 1;
+          this.setWeapon(nextWeapon);
+        } else if (e.deltaY < 0) {
+          const prevWeapon = this.selectedWeapon === 2 ? 1 : 2;
+          this.setWeapon(prevWeapon);
+        }
+      },
+      { passive: false }
+    );
   }
 
   updateAngle() {

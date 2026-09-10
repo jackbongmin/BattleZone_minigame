@@ -133,8 +133,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function selectWeapon(weaponId) {
-    currentSelectedWeapon = weaponId === 2 ? 2 : 1;
-    window.inputHandler.setWeapon(currentSelectedWeapon);
+    const target = weaponId === 2 ? 2 : 1;
+    currentSelectedWeapon = target;
+    window.inputHandler.selectedWeapon = target;
     socket.emit('switch_weapon', { weapon: currentSelectedWeapon });
 
     if (currentSelectedWeapon === 1) {
