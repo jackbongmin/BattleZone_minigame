@@ -1,5 +1,7 @@
 # 🎮 Battle Arena - 2D Top-Down Multiplayer Action Game
 
+https://battlezone-minigame.onrender.com/
+
 Node.js(Express + Socket.io)와 HTML5 Canvas를 기반으로 구현된 최대 10인 동시 접속 탑다운 2D 실시간 웹 액션 게임입니다.
 
 ---
